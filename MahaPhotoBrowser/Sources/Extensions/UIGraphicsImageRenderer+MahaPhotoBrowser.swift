@@ -32,17 +32,17 @@ extension MahaPhotoBrowserWrapper where Base: UIGraphicsImageRenderer {
         formatConfig: ((UIGraphicsImageRendererFormat) -> Void)? = nil,
         imageActions: ((CGContext) -> Void)
     ) -> UIImage {
-        let format: UIGraphicsImageRendererFormat
+        let rendererFormat: UIGraphicsImageRendererFormat
         if #available(iOS 11.0, *) {
-            format = .preferred()
+            rendererFormat = .preferred()
         } else {
-            format = .default()
+            rendererFormat = .default()
         }
-        formatConfig?(format)
+        formatConfig?(rendererFormat)
         
-        let renderer = UIGraphicsImageRenderer(size: size, format: format)
-        return renderer.image { context in
-            imageActions(context.cgContext)
+        let imageRenderer = UIGraphicsImageRenderer(size: size, format: rendererFormat)
+        return imageRenderer.image { rendererContext in
+            imageActions(rendererContext.cgContext)
         }
     }
 }

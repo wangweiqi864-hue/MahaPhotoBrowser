@@ -33,52 +33,52 @@ public class MahaPhotoConfiguration: NSObject {
     
     public typealias KBUnit = CGFloat
     
-    private static var single = MahaPhotoConfiguration()
+    private static var sharedConfiguration = MahaPhotoConfiguration()
     
     public class func `default`() -> MahaPhotoConfiguration {
-        MahaPhotoConfiguration.single
+        MahaPhotoConfiguration.sharedConfiguration
     }
     
     public class func resetConfiguration() {
-        MahaPhotoConfiguration.single = MahaPhotoConfiguration()
+        MahaPhotoConfiguration.sharedConfiguration = MahaPhotoConfiguration()
     }
     
-    private var pri_maxSelectCount = 9
+    private var configuredMaxSelectCount = 9
     /// Anything superior than 1 will enable the multiple selection feature. Defaults to 9.
     public var maxSelectCount: Int {
         get {
-            pri_maxSelectCount
+            configuredMaxSelectCount
         }
         set {
-            pri_maxSelectCount = max(1, newValue)
+            configuredMaxSelectCount = max(1, newValue)
         }
     }
     
-    private var pri_maxVideoSelectCount = 0
+    private var configuredMaxVideoSelectCount = 0
     /// A count for video max selection. Defaults to 0.
     /// - warning: Only valid in mix selection mode. (i.e. allowMixSelect = true)
     public var maxVideoSelectCount: Int {
         get {
-            if pri_maxVideoSelectCount <= 0 {
+            if configuredMaxVideoSelectCount <= 0 {
                 return maxSelectCount
             } else {
-                return max(minVideoSelectCount, min(pri_maxVideoSelectCount, maxSelectCount))
+                return max(minVideoSelectCount, min(configuredMaxVideoSelectCount, maxSelectCount))
             }
         }
         set {
-            pri_maxVideoSelectCount = newValue
+            configuredMaxVideoSelectCount = newValue
         }
     }
     
-    private var pri_minVideoSelectCount = 0
+    private var configuredMinVideoSelectCount = 0
     /// A count for video min selection. Defaults to 0.
     /// - warning: Only valid in mix selection mode. (i.e. allowMixSelect = true)
     public var minVideoSelectCount: Int {
         get {
-            min(maxSelectCount, max(pri_minVideoSelectCount, 0))
+            min(maxSelectCount, max(configuredMinVideoSelectCount, 0))
         }
         set {
-            pri_minVideoSelectCount = newValue
+            configuredMinVideoSelectCount = newValue
         }
     }
     
@@ -89,14 +89,14 @@ public class MahaPhotoConfiguration: NSObject {
     /// Preview selection max preview count, if the value is zero, only show `Camera`, `Album`, `Cancel` buttons. Defaults to 20.
     public var maxPreviewCount = 20
     
-    private var pri_initialIndex = 1
+    private var configuredInitialIndex = 1
     /// The index of the first selected image, and the indices of subsequently selected images are incremented based on this value. Defaults to 1.
     public var initialIndex: Int {
         get {
-            max(pri_initialIndex, 1)
+            max(configuredInitialIndex, 1)
         }
         set {
-            pri_initialIndex = newValue
+            configuredInitialIndex = newValue
         }
     }
     
@@ -117,39 +117,39 @@ public class MahaPhotoConfiguration: NSObject {
     /// If value is false, the LivePhoto logo is not displayed. Defaults to false.
     public var allowSelectLivePhoto = false
     
-    private var pri_allowTakePhotoInLibrary = true
+    private var allowsTakePhotoInLibrary = true
     /// Allow take photos in the album. Defaults to true.
     /// - warning: If allowTakePhoto and allowRecordVideo are both false, it will not be displayed.
     public var allowTakePhotoInLibrary: Bool {
         get {
-            pri_allowTakePhotoInLibrary && (cameraConfiguration.allowTakePhoto || cameraConfiguration.allowRecordVideo)
+            allowsTakePhotoInLibrary && (cameraConfiguration.allowTakePhoto || cameraConfiguration.allowRecordVideo)
         }
         set {
-            pri_allowTakePhotoInLibrary = newValue
+            allowsTakePhotoInLibrary = newValue
         }
     }
     
     /// Whether to callback directly after taking a photo. Defaults to false.
     public var callbackDirectlyAfterTakingPhoto = false
     
-    private var pri_allowEditImage = true
+    private var allowsEditImage = true
     public var allowEditImage: Bool {
         get {
-            pri_allowEditImage
+            allowsEditImage
         }
         set {
-            pri_allowEditImage = newValue
+            allowsEditImage = newValue
         }
     }
     
     /// - warning: The video can only be edited when no photos are selected, or only one video is selected, and the selection callback is executed immediately after editing is completed.
-    private var pri_allowEditVideo = false
+    private var allowsEditVideo = false
     public var allowEditVideo: Bool {
         get {
-            pri_allowEditVideo
+            allowsEditVideo
         }
         set {
-            pri_allowEditVideo = newValue
+            allowsEditVideo = newValue
         }
     }
     

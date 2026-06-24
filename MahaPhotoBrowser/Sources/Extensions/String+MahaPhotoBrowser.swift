@@ -29,15 +29,22 @@ import UIKit
 
 extension MahaPhotoBrowserWrapper where Base == String {
     func boundingRect(font: UIFont, limitSize: CGSize, lineBreakMode: NSLineBreakMode = .byCharWrapping) -> CGSize {
-        let style = NSMutableParagraphStyle()
-        style.lineBreakMode = lineBreakMode
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.lineBreakMode = lineBreakMode
         
-        let att = [NSAttributedString.Key.font: font, NSAttributedString.Key.paragraphStyle: style]
+        let attributes = [
+            NSAttributedString.Key.font: font,
+            NSAttributedString.Key.paragraphStyle: paragraphStyle
+        ]
         
-        let attContent = NSMutableAttributedString(string: base, attributes: att)
+        let attributedString = NSMutableAttributedString(string: base, attributes: attributes)
         
-        let size = attContent.boundingRect(with: limitSize, options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil).size
+        let measuredSize = attributedString.boundingRect(
+            with: limitSize,
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            context: nil
+        ).size
         
-        return CGSize(width: ceil(size.width), height: ceil(size.height))
+        return CGSize(width: ceil(measuredSize.width), height: ceil(measuredSize.height))
     }
 }

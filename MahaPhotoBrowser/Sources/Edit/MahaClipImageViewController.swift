@@ -48,7 +48,7 @@ class MahaClipImageViewController: UIViewController {
     /// 取消裁剪时动画frame
     private var cancelClipAnimateFrame: CGRect = .zero
     
-    private var viewDidAppearCount = 0
+    private var appearanceCount = 0
     
     private let originalImage: UIImage
     
@@ -179,7 +179,7 @@ class MahaClipImageViewController: UIViewController {
         return view
     }()
     
-    private var shouldLayout = true
+    private var needsInitialLayout = true
     
     private var panEdge: MahaClipImageViewController.ClipPanEdge = .none
     
@@ -189,7 +189,7 @@ class MahaClipImageViewController: UIViewController {
     
     private var clipOriginFrame: CGRect = .zero
     
-    private var isAnimate = false
+    private var isAnimatingTransition = false
     
     private var angle: CGFloat = 0
     
@@ -207,7 +207,7 @@ class MahaClipImageViewController: UIViewController {
     
     private var resetTimer: Timer?
     
-    private var showRatioColView: Bool { clipRatios.count > 1 }
+    private var shouldShowRatioCollectionView: Bool { clipRatios.count > 1 }
     
     var animate = true
     /// 用作进入裁剪界面首次动画frame
@@ -256,15 +256,15 @@ class MahaClipImageViewController: UIViewController {
         } else {
             editImage = image
         }
-        var firstEnter = false
+        var isFirstEntry = false
         if let ratio = status.ratio {
             selectedRatio = ratio
         } else {
-            firstEnter = true
+            isFirstEntry = true
             selectedRatio = MahaPhotoConfiguration.default().editImageConfiguration.clipRatios.first!
         }
         super.init(nibName: nil, bundle: nil)
-        if firstEnter {
+        if isFirstEntry {
             calculateClipRect()
         }
     }
@@ -284,12 +284,12 @@ class MahaClipImageViewController: UIViewController {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         
-        viewDidAppearCount += 1
+        appearanceCount += 1
         if presentingViewController is MahaEditImageViewController {
             transitioningDelegate = self
         }
         
-        guard viewDidAppearCount == 1 else {
+        guard appearanceCount == 1 else {
             return
         }
         
@@ -299,7 +299,7 @@ class MahaClipImageViewController: UIViewController {
                 animateImageView.frame = self.clipBoxFrame
                 self.bottomToolView.alpha = 1
                 self.rotateBtn.alpha = 1
-                self.clipRatioColView.alpha = self.showRatioColView ? 1 : 0
+                self.clipRatioColView.alpha = self.shouldShowRatioCollectionView ? 1 : 0
             } completion: { _ in
                 UIView.animate(withDuration: 0.1) {
                     self.mainScrollView.alpha = 1
@@ -320,8 +320,8 @@ class MahaClipImageViewController: UIViewController {
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         
-        guard shouldLayout else { return }
-        shouldLayout = false
+        guard needsInitialLayout else { return }
+        needsInitialLayout = false
         
         mainScrollView.frame = view.bounds
         
@@ -343,14 +343,14 @@ class MahaClipImageViewController: UIViewController {
         let ratioColViewX = rotateBtn.frame.maxX + 15
         clipRatioColView.frame = CGRect(x: ratioColViewX, y: ratioColViewY, width: view.bounds.width - ratioColViewX, height: 70)
         
-        if showRatioColView, let index = clipRatios.firstIndex(where: { $0 == self.selectedRatio }) {
+        if shouldShowRatioCollectionView, let index = clipRatios.firstIndex(where: { $0 == self.selectedRatio }) {
             clipRatioColView.scrollToItem(at: IndexPath(row: index, section: 0), at: .centeredHorizontally, animated: false)
         }
     }
     
     override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
         super.viewWillTransition(to: size, with: coordinator)
-        shouldLayout = true
+        needsInitialLayout = true
         maxClipFrame = calculateMaxClipFrame()
     }
     
@@ -547,7 +547,7 @@ class MahaClipImageViewController: UIViewController {
     }
     
     @objc private func revertBtnClick() {
-        guard !isAnimate else { return }
+        guard !isAnimatingTransition else { return }
         
         configFakeAnimateImageView()
         let revertAngle: CGFloat
@@ -591,7 +591,7 @@ class MahaClipImageViewController: UIViewController {
     }
     
     @objc private func rotateBtnClick() {
-        guard !isAnimate else { return }
+        guard !isAnimatingTransition else { return }
         
         angle -= 90
         if angle == -360 {
@@ -649,12 +649,12 @@ class MahaClipImageViewController: UIViewController {
     
     private func animateFakeImageView(animations: @escaping (() -> Void), completion: (() -> Void)? = nil) {
         containerView.alpha = 0
-        isAnimate = true
+        isAnimatingTransition = true
         UIView.animate(withDuration: 0.25) {
             animations()
         } completion: { _ in
             self.containerView.alpha = 1
-            self.isAnimate = false
+            self.isAnimatingTransition = false
             self.fakeAnimateImageView.removeFromSuperview()
             completion?()
         }
@@ -937,7 +937,7 @@ class MahaClipImageViewController: UIViewController {
             
             self.updateMainScrollViewContentInsetAndScale()
             self.rotateBtn.alpha = 1
-            self.clipRatioColView.alpha = self.showRatioColView ? 1 : 0
+            self.clipRatioColView.alpha = self.shouldShowRatioCollectionView ? 1 : 0
         }
     }
     
@@ -1009,7 +1009,7 @@ extension MahaClipImageViewController: UICollectionViewDataSource, UICollectionV
     
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         let ratio = clipRatios[indexPath.row]
-        guard ratio != selectedRatio, !isAnimate else {
+        guard ratio != selectedRatio, !isAnimatingTransition else {
             return
         }
         

@@ -28,17 +28,17 @@ import UIKit
 import Photos
 
 class MahaEmbedAlbumListView: UIView {
-    static let rowH: CGFloat = 60
-    
+    static let rowHeight: CGFloat = 60
+
     private var selectedAlbum: MahaAlbumListModel?
-    
-    private lazy var tableBgView = UIView()
-    
+
+    private lazy var tableContainerView = UIView()
+
     private lazy var tableView: UITableView = {
         let view = UITableView(frame: .zero, style: .plain)
         view.backgroundColor = .maha.albumListBgColor
         view.tableFooterView = UIView()
-        view.rowHeight = MahaEmbedAlbumListView.rowH
+        view.rowHeight = MahaEmbedAlbumListView.rowHeight
         view.separatorInset = UIEdgeInsets(top: 0, left: 12, bottom: 0, right: 0)
         view.separatorColor = .maha.separatorLineColor
         view.delegate = self
@@ -46,65 +46,56 @@ class MahaEmbedAlbumListView: UIView {
         MahaAlbumListCell.maha.register(view)
         return view
     }()
-    
-    private var arrDataSource: [MahaAlbumListModel] = []
-    
+
+    private var albumListModels: [MahaAlbumListModel] = []
+
     var selectAlbumBlock: ((MahaAlbumListModel) -> Void)?
-    
+
     var hideBlock: (() -> Void)?
-    
-    private var orientation: UIInterfaceOrientation = UIApplication.shared.statusBarOrientation
-    
+
+    private var currentOrientation: UIInterfaceOrientation = UIApplication.shared.statusBarOrientation
+
     init(selectedAlbum: MahaAlbumListModel?) {
         self.selectedAlbum = selectedAlbum
         super.init(frame: .zero)
         setupUI()
         loadAlbumList()
     }
-    
+
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-    
+
     override func layoutSubviews() {
         super.layoutSubviews()
-        let currOri = UIApplication.shared.statusBarOrientation
-        
-        guard currOri != orientation else {
+        let interfaceOrientation = UIApplication.shared.statusBarOrientation
+
+        guard interfaceOrientation != currentOrientation else {
             return
         }
-        orientation = currOri
-        
+        currentOrientation = interfaceOrientation
+
         guard !isHidden else {
             return
         }
-        
-        let bgFrame = calculateBgViewBounds()
-        
-        let path = UIBezierPath(roundedRect: CGRect(x: 0, y: 0, width: frame.width, height: bgFrame.height), byRoundingCorners: [.bottomLeft, .bottomRight], cornerRadii: CGSize(width: 8, height: 8))
-        tableBgView.layer.mask = nil
-        let maskLayer = CAShapeLayer()
-        maskLayer.path = path.cgPath
-        tableBgView.layer.mask = maskLayer
-        
-        tableBgView.frame = bgFrame
-        tableView.frame = tableBgView.bounds
+
+        updateTableContainerLayout(for: calculateTableContainerFrame())
     }
-    
+
     private func setupUI() {
         clipsToBounds = true
-        
+
         backgroundColor = .maha.embedAlbumListTranslucentColor
-        
-        addSubview(tableBgView)
-        tableBgView.addSubview(tableView)
-        
+
+        addSubview(tableContainerView)
+        tableContainerView.addSubview(tableView)
+
         let tap = UITapGestureRecognizer(target: self, action: #selector(tapAction(_:)))
         tap.delegate = self
         addGestureRecognizer(tap)
     }
-    
+
     private func loadAlbumList(completion: (() -> Void)? = nil) {
         DispatchQueue.global().async {
             MahaPhotoManager.getPhotoAlbumList(
@@ -112,9 +103,8 @@ class MahaEmbedAlbumListView: UIView {
                 allowSelectImage: MahaPhotoConfiguration.default().allowSelectImage,
                 allowSelectVideo: MahaPhotoConfiguration.default().allowSelectVideo
             ) { [weak self] albumList in
-                self?.arrDataSource.removeAll()
-                self?.arrDataSource.append(contentsOf: albumList)
-                
+                self?.albumListModels = albumList
+
                 MahaMainAsync {
                     completion?()
                     self?.tableView.reloadData()
@@ -122,32 +112,45 @@ class MahaEmbedAlbumListView: UIView {
             }
         }
     }
-    
-    private func calculateBgViewBounds() -> CGRect {
-        let contentH = CGFloat(arrDataSource.count) * MahaEmbedAlbumListView.rowH
-        
-        let maxH: CGFloat
+
+    private func calculateTableContainerFrame() -> CGRect {
+        let contentHeight = CGFloat(albumListModels.count) * MahaEmbedAlbumListView.rowHeight
+
+        let maxHeight: CGFloat
         if UIApplication.shared.statusBarOrientation.isPortrait {
-            maxH = min(frame.height * 0.7, contentH)
+            maxHeight = min(frame.height * 0.7, contentHeight)
         } else {
-            maxH = min(frame.height * 0.8, contentH)
+            maxHeight = min(frame.height * 0.8, contentHeight)
         }
-        
-        return CGRect(x: 0, y: 0, width: frame.width, height: maxH)
+
+        return CGRect(x: 0, y: 0, width: frame.width, height: maxHeight)
     }
-    
+
+    private func updateTableContainerLayout(for frame: CGRect) {
+        let roundedPath = UIBezierPath(
+            roundedRect: CGRect(x: 0, y: 0, width: frame.width, height: frame.height),
+            byRoundingCorners: [.bottomLeft, .bottomRight],
+            cornerRadii: CGSize(width: 8, height: 8)
+        )
+        let maskLayer = CAShapeLayer()
+        maskLayer.path = roundedPath.cgPath
+        tableContainerView.layer.mask = maskLayer
+        tableContainerView.frame = frame
+        tableView.frame = tableContainerView.bounds
+    }
+
     @objc private func tapAction(_ tap: UITapGestureRecognizer) {
         hide()
         hideBlock?()
     }
-    
+
     /// 这里不采用监听相册发生变化的方式，是因为每次变化，系统都会回调多次，造成重复获取相册列表
     func show(reloadAlbumList: Bool) {
         guard reloadAlbumList else {
             animateShow()
             return
         }
-        
+
         if #available(iOS 14.0, *), PHPhotoLibrary.maha.authStatus(for: .readWrite) == .limited {
             loadAlbumList { [weak self] in
                 self?.animateShow()
@@ -157,45 +160,32 @@ class MahaEmbedAlbumListView: UIView {
             animateShow()
         }
     }
-    
+
     func hide() {
-        var toFrame = tableBgView.frame
-        toFrame.origin.y = -toFrame.height
-        
+        var hiddenFrame = tableContainerView.frame
+        hiddenFrame.origin.y = -hiddenFrame.height
+
         UIView.animate(withDuration: 0.25, animations: {
             self.alpha = 0
-            self.tableBgView.frame = toFrame
+            self.tableContainerView.frame = hiddenFrame
         }) { _ in
             self.isHidden = true
             self.alpha = 1
         }
     }
-    
+
     private func animateShow() {
-        let toFrame = calculateBgViewBounds()
-        
+        let visibleFrame = calculateTableContainerFrame()
+
         isHidden = false
         alpha = 0
-        var newFrame = toFrame
-        newFrame.origin.y -= newFrame.height
-        
-        if newFrame != tableBgView.frame {
-            let path = UIBezierPath(
-                roundedRect: CGRect(x: 0, y: 0, width: newFrame.width, height: newFrame.height),
-                byRoundingCorners: [.bottomLeft, .bottomRight],
-                cornerRadii: CGSize(width: 8, height: 8)
-            )
-            tableBgView.layer.mask = nil
-            let maskLayer = CAShapeLayer()
-            maskLayer.path = path.cgPath
-            tableBgView.layer.mask = maskLayer
-        }
-        
-        tableBgView.frame = newFrame
-        tableView.frame = tableBgView.bounds
+        var hiddenFrame = visibleFrame
+        hiddenFrame.origin.y -= hiddenFrame.height
+
+        updateTableContainerLayout(for: hiddenFrame)
         UIView.animate(withDuration: 0.25) {
             self.alpha = 1
-            self.tableBgView.frame = toFrame
+            self.tableContainerView.frame = visibleFrame
         }
     }
 }
@@ -203,31 +193,31 @@ class MahaEmbedAlbumListView: UIView {
 extension MahaEmbedAlbumListView: UIGestureRecognizerDelegate {
     override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
         let point = gestureRecognizer.location(in: self)
-        return !tableBgView.frame.contains(point)
+        return !tableContainerView.frame.contains(point)
     }
 }
 
 extension MahaEmbedAlbumListView: UITableViewDataSource, UITableViewDelegate {
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return arrDataSource.count
+        return albumListModels.count
     }
-    
+
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: MahaAlbumListCell.maha.identifier, for: indexPath) as! MahaAlbumListCell
-        
-        let m = arrDataSource[indexPath.row]
-        
-        cell.configureCell(model: m, style: .embedAlbumList)
-        
-        cell.selectBtn.isSelected = m == selectedAlbum
-        
+
+        let albumModel = albumListModels[indexPath.row]
+
+        cell.configureCell(model: albumModel, style: .embedAlbumList)
+
+        cell.selectBtn.isSelected = albumModel == selectedAlbum
+
         return cell
     }
-    
+
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        let m = arrDataSource[indexPath.row]
-        selectedAlbum = m
-        selectAlbumBlock?(m)
+        let albumModel = albumListModels[indexPath.row]
+        selectedAlbum = albumModel
+        selectAlbumBlock?(albumModel)
         hide()
         if let indexPaths = tableView.indexPathsForVisibleRows {
             tableView.reloadRows(at: indexPaths, with: .none)

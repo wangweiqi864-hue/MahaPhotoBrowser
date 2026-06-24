@@ -450,7 +450,7 @@ public class MahaPhotoManager: NSObject {
     /// Save asset original data to file url. Support save image and video.
     /// - Note: Asynchronously write to a local file. Calls completionHandler block on the main queue. If the asset object is in iCloud, it will be downloaded first and then written in the method. The timeout time is `MahaPhotoConfiguration.default().timeout`.
     public class func saveAsset(_ asset: PHAsset, toFile fileUrl: URL, completion: @escaping ((Error?) -> Void)) {
-        guard let resource = asset.maha.resource else {
+        guard let resource = asset.maha.assetResource else {
             completion(NSError.assetSaveError)
             return
         }

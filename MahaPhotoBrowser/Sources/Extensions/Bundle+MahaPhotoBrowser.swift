@@ -29,78 +29,78 @@ import Foundation
 private class BundleFinder {}
 
 extension Bundle {
-    private static var bundle: Bundle?
-    
+    private static var localizedResourceBundle: Bundle?
+
+    private static func findBundle(
+        named bundleName: String,
+        candidateURLs: [URL?]
+    ) -> Bundle? {
+        for candidateURL in candidateURLs {
+            let bundleURL = candidateURL?.appendingPathComponent(bundleName + ".bundle")
+            if let bundle = bundleURL.flatMap(Bundle.init(url:)) {
+                return bundle
+            }
+        }
+
+        return nil
+    }
+
     static var normalModule: Bundle? = {
         let bundleName = "MahaPhotoBrowser"
 
-        var candidates = [
+        var candidateURLs = [
             // Bundle should be present here when the package is linked into an App.
             Bundle.main.resourceURL,
-            
+
             // Bundle should be present here when the package is linked into a framework.
             Bundle(for: MahaPhotoPicker.self).resourceURL,
-            
+
             // For command-line tools.
             Bundle.main.bundleURL
         ]
-        
+
         #if SWIFT_PACKAGE
             // For SWIFT_PACKAGE.
-            candidates.append(Bundle.module.bundleURL)
+            candidateURLs.append(Bundle.module.bundleURL)
         #endif
 
-        for candidate in candidates {
-            let bundlePath = candidate?.appendingPathComponent(bundleName + ".bundle")
-            if let bundle = bundlePath.flatMap(Bundle.init(url:)) {
-                return bundle
-            }
-        }
-        
-        return nil
+        return findBundle(named: bundleName, candidateURLs: candidateURLs)
     }()
-    
+
     static var spmModule: Bundle? = {
         let bundleName = "MahaPhotoBrowser_MahaPhotoBrowser"
 
-        let candidates = [
+        let candidateURLs = [
             // Bundle should be present here when the package is linked into an App.
             Bundle.main.resourceURL,
-            
+
             // Bundle should be present here when the package is linked into a framework.
             Bundle(for: BundleFinder.self).resourceURL,
-            
+
             // For command-line tools.
             Bundle.main.bundleURL
         ]
 
-        for candidate in candidates {
-            let bundlePath = candidate?.appendingPathComponent(bundleName + ".bundle")
-            if let bundle = bundlePath.flatMap(Bundle.init(url:)) {
-                return bundle
-            }
-        }
-        
-        return nil
+        return findBundle(named: bundleName, candidateURLs: candidateURLs)
     }()
-    
+
     static var mahaPhotoBrowserBundle: Bundle? {
         return normalModule ?? spmModule
     }
-    
+
     class func resetMahaLanguage() {
-        bundle = nil
+        localizedResourceBundle = nil
     }
-    
+
     class func mahaLocalizedString(_ key: String) -> String {
-        if bundle == nil {
+        if localizedResourceBundle == nil {
             guard let path = Bundle.mahaPhotoBrowserBundle?.path(forResource: MahaCustomLanguageDeploy.language.key, ofType: "lproj") else {
                 return ""
             }
-            bundle = Bundle(path: path)
+            localizedResourceBundle = Bundle(path: path)
         }
-        
-        let value = bundle?.localizedString(forKey: key, value: nil, table: nil)
+
+        let value = localizedResourceBundle?.localizedString(forKey: key, value: nil, table: nil)
         return Bundle.main.localizedString(forKey: key, value: value, table: nil)
     }
 }

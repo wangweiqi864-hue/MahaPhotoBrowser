@@ -39,21 +39,21 @@ public class MahaBaseStickertState: NSObject {
     public init(
         id: String,
         image: UIImage,
-        originScale: CGFloat,
-        originAngle: CGFloat,
-        originFrame: CGRect,
-        gesScale: CGFloat,
-        gesRotation: CGFloat,
-        totalTranslationPoint: CGPoint
+        originScale scale: CGFloat,
+        originAngle angle: CGFloat,
+        originFrame frame: CGRect,
+        gesScale gestureScale: CGFloat,
+        gesRotation gestureRotation: CGFloat,
+        totalTranslationPoint translationPoint: CGPoint
     ) {
         self.id = id
         self.image = image
-        self.originScale = originScale
-        self.originAngle = originAngle
-        self.originFrame = originFrame
-        self.gesScale = gesScale
-        self.gesRotation = gesRotation
-        self.totalTranslationPoint = totalTranslationPoint
+        originScale = scale
+        originAngle = angle
+        originFrame = frame
+        gesScale = gestureScale
+        gesRotation = gestureRotation
+        totalTranslationPoint = translationPoint
         super.init()
     }
 }
@@ -69,9 +69,9 @@ public class MahaTextStickerState: MahaBaseStickertState {
     public init(
         id: String,
         text: String,
-        textColor: UIColor,
-        font: UIFont?,
-        style: MahaInputTextStyle,
+        textColor color: UIColor,
+        font textFont: UIFont?,
+        style textStyle: MahaInputTextStyle,
         image: UIImage,
         originScale: CGFloat,
         originAngle: CGFloat,
@@ -81,9 +81,9 @@ public class MahaTextStickerState: MahaBaseStickertState {
         totalTranslationPoint: CGPoint
     ) {
         self.text = text
-        self.textColor = textColor
-        self.font = font
-        self.style = style
+        textColor = color
+        font = textFont
+        style = textStyle
         super.init(
             id: id,
             image: image,

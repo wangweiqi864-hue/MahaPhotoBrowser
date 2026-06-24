@@ -29,7 +29,8 @@ import UIKit
 extension MahaPhotoBrowserWrapper where Base: UIViewController {
     func showAlertController(_ alertController: UIAlertController) {
         if deviceIsiPad() {
-            alertController.popoverPresentationController?.sourceView = base.view
+            let popoverController = alertController.popoverPresentationController
+            popoverController?.sourceView = base.view
         }
         base.showDetailViewController(alertController, sender: nil)
     }

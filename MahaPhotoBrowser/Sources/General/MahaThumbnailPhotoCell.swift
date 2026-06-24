@@ -28,7 +28,15 @@ import UIKit
 import Photos
 
 class MahaThumbnailPhotoCell: UICollectionViewCell {
-    private let selectBtnWH: CGFloat = 24
+    private enum Layout {
+        static let selectButtonSize: CGFloat = 24
+        static let selectButtonRightInset: CGFloat = 32
+        static let selectButtonTopInset: CGFloat = 8
+        static let indexLabelLeftInset: CGFloat = 8
+        static let indexLabelTopInset: CGFloat = 5
+        static let bottomShadowHeight: CGFloat = 25
+        static let progressViewSize: CGFloat = 20
+    }
     
     private lazy var containerView = UIView()
     
@@ -54,11 +62,11 @@ class MahaThumbnailPhotoCell: UICollectionViewCell {
         return view
     }()
     
-    private var imageIdentifier = ""
+    private var displayedImageIdentifier = ""
     
-    private var smallImageRequestID: PHImageRequestID = PHInvalidImageRequestID
+    private var thumbnailImageRequestID: PHImageRequestID = PHInvalidImageRequestID
     
-    private var bigImageReqeustID: PHImageRequestID = PHInvalidImageRequestID
+    private var originalImageRequestID: PHImageRequestID = PHInvalidImageRequestID
     
     lazy var imageView: UIImageView = {
         let view = UIImageView()
@@ -71,7 +79,7 @@ class MahaThumbnailPhotoCell: UICollectionViewCell {
         let btn = MahaEnlargeButton(type: .custom)
         btn.setBackgroundImage(.maha.getImage("zl_btn_unselected"), for: .normal)
         btn.setBackgroundImage(.maha.getImage("zl_btn_selected"), for: .selected)
-        btn.addTarget(self, action: #selector(btnSelectClick), for: .touchUpInside)
+        btn.addTarget(self, action: #selector(handleSelectButtonTap), for: .touchUpInside)
         btn.enlargeInsets = UIEdgeInsets(top: 5, left: 10, bottom: 10, right: 5)
         return btn
     }()
@@ -90,7 +98,7 @@ class MahaThumbnailPhotoCell: UICollectionViewCell {
         if MahaPhotoUIConfiguration.default().showIndexOnSelectBtn {
             label.font = .maha.font(ofSize: 14)
             label.textAlignment = .center
-            label.layer.cornerRadius = selectBtnWH / 2
+            label.layer.cornerRadius = Layout.selectButtonSize / 2
             label.layer.masksToBounds = true
         } else {
             label.font = .maha.font(ofSize: 14, bold: true)
@@ -111,7 +119,7 @@ class MahaThumbnailPhotoCell: UICollectionViewCell {
     
     var model: MahaPhotoModel! {
         didSet {
-            configureCell()
+            refreshCellContent()
         }
     }
     
@@ -160,22 +168,37 @@ class MahaThumbnailPhotoCell: UICollectionViewCell {
         
         containerView.frame = bounds
         coverView.frame = bounds
-        btnSelect.frame = CGRect(x: bounds.width - 32, y: 8, width: selectBtnWH, height: selectBtnWH)
+        btnSelect.frame = CGRect(
+            x: bounds.width - Layout.selectButtonRightInset,
+            y: Layout.selectButtonTopInset,
+            width: Layout.selectButtonSize,
+            height: Layout.selectButtonSize
+        )
         if MahaPhotoUIConfiguration.default().showIndexOnSelectBtn {
             indexLabel.frame = btnSelect.frame
         } else {
-            indexLabel.frame = CGRect(x: 8, y: 5, width: 50, height: selectBtnWH)
+            indexLabel.frame = CGRect(
+                x: Layout.indexLabelLeftInset,
+                y: Layout.indexLabelTopInset,
+                width: 50,
+                height: Layout.selectButtonSize
+            )
         }
         
-        bottomShadowView.frame = CGRect(x: 0, y: bounds.height - 25, width: bounds.width, height: 25)
+        bottomShadowView.frame = CGRect(x: 0, y: bounds.height - Layout.bottomShadowHeight, width: bounds.width, height: Layout.bottomShadowHeight)
         videoTag.frame = CGRect(x: 5, y: 1, width: 20, height: 15)
         livePhotoTag.frame = CGRect(x: 5, y: -1, width: 20, height: 20)
         editImageTag.frame = CGRect(x: 5, y: -1, width: 20, height: 20)
         descLabel.frame = CGRect(x: 30, y: 1, width: bounds.width - 35, height: 17)
-        progressView.frame = CGRect(x: (bounds.width - 20) / 2, y: (bounds.height - 20) / 2, width: 20, height: 20)
+        progressView.frame = CGRect(
+            x: (bounds.width - Layout.progressViewSize) / 2,
+            y: (bounds.height - Layout.progressViewSize) / 2,
+            width: Layout.progressViewSize,
+            height: Layout.progressViewSize
+        )
     }
     
-    @objc func btnSelectClick() {
+    @objc func handleSelectButtonTap() {
         selectedBlock?({ [weak self] isSelected in
             self?.btnSelect.isSelected = isSelected
             self?.btnSelect.layer.removeAllAnimations()
@@ -186,15 +209,15 @@ class MahaThumbnailPhotoCell: UICollectionViewCell {
             }
             
             if isSelected {
-                self?.fetchBigImage()
+                self?.requestOriginalImage()
             } else {
                 self?.progressView.isHidden = true
-                self?.cancelFetchBigImage()
+                self?.cancelOriginalImageRequest()
             }
         })
     }
     
-    private func configureCell() {
+    private func refreshCellContent() {
         let config = MahaPhotoConfiguration.default()
         let uiConfig = MahaPhotoUIConfiguration.default()
         
@@ -249,19 +272,19 @@ class MahaThumbnailPhotoCell: UICollectionViewCell {
         btnSelect.isSelected = model.isSelected
         
         if model.isSelected {
-            fetchBigImage()
+            requestOriginalImage()
         } else {
-            cancelFetchBigImage()
+            cancelOriginalImageRequest()
         }
         
         if let editImage = model.editImage {
             imageView.image = editImage
         } else {
-            fetchSmallImage()
+            requestThumbnailImage()
         }
     }
     
-    private func fetchSmallImage() {
+    private func requestThumbnailImage() {
         let size: CGSize
         let maxSideLength = bounds.width * 2
         if model.whRatio > 1 {
@@ -272,49 +295,49 @@ class MahaThumbnailPhotoCell: UICollectionViewCell {
             size = CGSize(width: maxSideLength, height: h)
         }
         
-        if smallImageRequestID > PHInvalidImageRequestID {
-            PHImageManager.default().cancelImageRequest(smallImageRequestID)
+        if thumbnailImageRequestID > PHInvalidImageRequestID {
+            PHImageManager.default().cancelImageRequest(thumbnailImageRequestID)
         }
         
-        imageIdentifier = model.ident
+        displayedImageIdentifier = model.ident
         imageView.image = nil
-        smallImageRequestID = MahaPhotoManager.fetchImage(for: model.asset, size: size, completion: { [weak self] image, isDegraded in
-            if self?.imageIdentifier == self?.model.ident {
+        thumbnailImageRequestID = MahaPhotoManager.fetchImage(for: model.asset, size: size, completion: { [weak self] image, isDegraded in
+            if self?.displayedImageIdentifier == self?.model.ident {
                 self?.imageView.image = image
             }
             if !isDegraded {
-                self?.smallImageRequestID = PHInvalidImageRequestID
+                self?.thumbnailImageRequestID = PHInvalidImageRequestID
             }
         })
     }
     
-    private func fetchBigImage() {
-        cancelFetchBigImage()
+    private func requestOriginalImage() {
+        cancelOriginalImageRequest()
         
-        bigImageReqeustID = MahaPhotoManager.fetchOriginalImageData(for: model.asset, progress: { [weak self] progress, _, _, _ in
+        originalImageRequestID = MahaPhotoManager.fetchOriginalImageData(for: model.asset, progress: { [weak self] progress, _, _, _ in
             if self?.model.isSelected == true {
                 self?.progressView.isHidden = false
                 self?.progressView.progress = max(0.1, progress)
                 self?.imageView.alpha = 0.5
                 if progress >= 1 {
-                    self?.resetProgressViewStatus()
+                    self?.resetOriginalImageProgress()
                 }
             } else {
-                self?.cancelFetchBigImage()
+                self?.cancelOriginalImageRequest()
             }
         }, completion: { [weak self] _, _, _ in
-            self?.resetProgressViewStatus()
+            self?.resetOriginalImageProgress()
         })
     }
     
-    private func cancelFetchBigImage() {
-        if bigImageReqeustID > PHInvalidImageRequestID {
-            PHImageManager.default().cancelImageRequest(bigImageReqeustID)
+    private func cancelOriginalImageRequest() {
+        if originalImageRequestID > PHInvalidImageRequestID {
+            PHImageManager.default().cancelImageRequest(originalImageRequestID)
         }
-        resetProgressViewStatus()
+        resetOriginalImageProgress()
     }
     
-    private func resetProgressViewStatus() {
+    private func resetOriginalImageProgress() {
         progressView.isHidden = true
         imageView.alpha = 1
     }

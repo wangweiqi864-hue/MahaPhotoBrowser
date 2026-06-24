@@ -27,11 +27,15 @@
 import UIKit
 
 extension MahaPhotoBrowserWrapper where Base: UIFont {
+    private static func fallbackSystemFont(ofSize size: CGFloat, bold: Bool) -> UIFont {
+        return UIFont.systemFont(ofSize: size, weight: bold ? .medium : .regular)
+    }
+
     static func font(ofSize size: CGFloat, bold: Bool = false) -> UIFont {
         guard let name = MahaCustomFontDeploy.fontName else {
-            return UIFont.systemFont(ofSize: size, weight: bold ? .medium : .regular)
+            return fallbackSystemFont(ofSize: size, bold: bold)
         }
-        
-        return UIFont(name: name, size: size) ?? UIFont.systemFont(ofSize: size, weight: bold ? .medium : .regular)
+
+        return UIFont(name: name, size: size) ?? fallbackSystemFont(ofSize: size, bold: bold)
     }
 }

@@ -28,10 +28,14 @@ import UIKit
 import Photos
 
 class MahaAlbumListController: UIViewController {
+    private enum Layout {
+        static let navigationBarHeight: CGFloat = 44
+    }
+
     private lazy var navView = MahaExternalAlbumListNavView(title: localLanguageTextValue(.photo))
-    
+
     private var navBlurView: UIVisualEffectView?
-    
+
     private lazy var tableView: UITableView = {
         let view = UITableView(frame: .zero, style: .plain)
         view.backgroundColor = .maha.albumListBgColor
@@ -41,116 +45,120 @@ class MahaAlbumListController: UIViewController {
         view.separatorColor = .maha.separatorLineColor
         view.delegate = self
         view.dataSource = self
-        
+
         if #available(iOS 11.0, *) {
             view.contentInsetAdjustmentBehavior = .always
         }
-        
+
         MahaAlbumListCell.maha.register(view)
         return view
     }()
-    
-    private var arrDataSource: [MahaAlbumListModel] = []
-    
-    private var shouldReloadAlbumList = true
-    
+
+    private var albumListModels: [MahaAlbumListModel] = []
+
+    private var needsAlbumReload = true
+
     override var preferredStatusBarStyle: UIStatusBarStyle {
         return MahaPhotoUIConfiguration.default().statusBarStyle
     }
-    
+
     deinit {
         mahaDebugPrint("MahaAlbumListController deinit")
     }
-    
+
     override func viewDidLoad() {
         super.viewDidLoad()
 
         setupUI()
         PHPhotoLibrary.shared().register(self)
     }
-    
+
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         navigationController?.navigationBar.isHidden = true
-        
-        guard shouldReloadAlbumList else {
+
+        reloadAlbumListIfNeeded()
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+
+        var insets = UIEdgeInsets(top: 20, left: 0, bottom: 0, right: 0)
+        var tableContentInsetTop: CGFloat = 20
+        if #available(iOS 11.0, *) {
+            insets = view.safeAreaInsets
+            tableContentInsetTop = Layout.navigationBarHeight
+        } else {
+            tableContentInsetTop += Layout.navigationBarHeight
+        }
+
+        navView.frame = CGRect(x: 0, y: 0, width: view.frame.width, height: insets.top + Layout.navigationBarHeight)
+
+        tableView.frame = CGRect(x: insets.left, y: 0, width: view.frame.width - insets.left - insets.right, height: view.frame.height)
+        tableView.contentInset = UIEdgeInsets(top: tableContentInsetTop, left: 0, bottom: 0, right: 0)
+        tableView.scrollIndicatorInsets = UIEdgeInsets(top: Layout.navigationBarHeight, left: 0, bottom: 0, right: 0)
+    }
+
+    private func setupUI() {
+        view.backgroundColor = .maha.albumListBgColor
+
+        view.addSubview(tableView)
+
+        navView.backBtn.isHidden = true
+        navView.cancelBlock = { [weak self] in
+            let nav = self?.navigationController as? MahaImageNavController
+            nav?.cancelHandler?()
+            nav?.dismiss(animated: true, completion: nil)
+        }
+        view.addSubview(navView)
+    }
+
+    private func reloadAlbumListIfNeeded() {
+        guard needsAlbumReload else {
             return
         }
-        
+
+        fetchAlbumList()
+    }
+
+    private func fetchAlbumList() {
         DispatchQueue.global().async {
             MahaPhotoManager.getPhotoAlbumList(
                 ascending: MahaPhotoUIConfiguration.default().sortAscending,
                 allowSelectImage: MahaPhotoConfiguration.default().allowSelectImage,
                 allowSelectVideo: MahaPhotoConfiguration.default().allowSelectVideo
             ) { [weak self] albumList in
-                self?.arrDataSource.removeAll()
-                self?.arrDataSource.append(contentsOf: albumList)
-                
-                self?.shouldReloadAlbumList = false
+                self?.albumListModels = albumList
+                self?.needsAlbumReload = false
                 MahaMainAsync {
                     self?.tableView.reloadData()
                 }
             }
         }
     }
-    
-    override func viewDidLayoutSubviews() {
-        super.viewDidLayoutSubviews()
-        
-        let navViewNormalH: CGFloat = 44
-        
-        var insets = UIEdgeInsets(top: 20, left: 0, bottom: 0, right: 0)
-        var collectionViewInsetTop: CGFloat = 20
-        if #available(iOS 11.0, *) {
-            insets = view.safeAreaInsets
-            collectionViewInsetTop = navViewNormalH
-        } else {
-            collectionViewInsetTop += navViewNormalH
-        }
-        
-        navView.frame = CGRect(x: 0, y: 0, width: view.frame.width, height: insets.top + navViewNormalH)
-        
-        tableView.frame = CGRect(x: insets.left, y: 0, width: view.frame.width - insets.left - insets.right, height: view.frame.height)
-        tableView.contentInset = UIEdgeInsets(top: collectionViewInsetTop, left: 0, bottom: 0, right: 0)
-        tableView.scrollIndicatorInsets = UIEdgeInsets(top: 44, left: 0, bottom: 0, right: 0)
-    }
-    
-    private func setupUI() {
-        view.backgroundColor = .maha.albumListBgColor
-        
-        view.addSubview(tableView)
-        
-        navView.backBtn.isHidden = true
-        navView.cancelBlock = { [weak self] in
-            let nav = self?.navigationController as? MahaImageNavController
-            nav?.cancelBlock?()
-            nav?.dismiss(animated: true, completion: nil)
-        }
-        view.addSubview(navView)
-    }
 }
 
 extension MahaAlbumListController: UITableViewDataSource, UITableViewDelegate {
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return arrDataSource.count
+        return albumListModels.count
     }
 
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: MahaAlbumListCell.maha.identifier, for: indexPath) as! MahaAlbumListCell
-        
-        cell.configureCell(model: arrDataSource[indexPath.row], style: .externalAlbumList)
-        
+
+        cell.configureCell(model: albumListModels[indexPath.row], style: .externalAlbumList)
+
         return cell
     }
-    
+
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        let vc = MahaThumbnailViewController(albumList: arrDataSource[indexPath.row])
+        let vc = MahaThumbnailViewController(albumList: albumListModels[indexPath.row])
         show(vc, sender: nil)
     }
 }
 
 extension MahaAlbumListController: PHPhotoLibraryChangeObserver {
     func photoLibraryDidChange(_ changeInstance: PHChange) {
-        shouldReloadAlbumList = true
+        needsAlbumReload = true
     }
 }

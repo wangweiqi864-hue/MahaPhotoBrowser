@@ -69,14 +69,13 @@ public class MahaAlbumListModel: NSObject {
     }
     
     public func refetchPhotos() {
-        let models = MahaPhotoManager.fetchPhoto(
+        let fetchedModels = MahaPhotoManager.fetchPhoto(
             in: result,
             ascending: MahaPhotoUIConfiguration.default().sortAscending,
             allowSelectImage: MahaPhotoConfiguration.default().allowSelectImage,
             allowSelectVideo: MahaPhotoConfiguration.default().allowSelectVideo
         )
-        self.models.removeAll()
-        self.models.append(contentsOf: models)
+        models = fetchedModels
     }
     
     func refreshResult() {

@@ -29,32 +29,32 @@ import Photos
 
 public extension MahaPhotoConfiguration {
     @discardableResult
-    func maxSelectCount(_ count: Int) -> MahaPhotoConfiguration {
-        maxSelectCount = count
+    func maxSelectCount(_ maximumCount: Int) -> MahaPhotoConfiguration {
+        maxSelectCount = maximumCount
         return self
     }
     
     @discardableResult
-    func maxVideoSelectCount(_ count: Int) -> MahaPhotoConfiguration {
-        maxVideoSelectCount = count
+    func maxVideoSelectCount(_ maximumCount: Int) -> MahaPhotoConfiguration {
+        maxVideoSelectCount = maximumCount
         return self
     }
     
     @discardableResult
-    func minVideoSelectCount(_ count: Int) -> MahaPhotoConfiguration {
-        minVideoSelectCount = count
+    func minVideoSelectCount(_ minimumCount: Int) -> MahaPhotoConfiguration {
+        minVideoSelectCount = minimumCount
         return self
     }
     
     @discardableResult
-    func allowMixSelect(_ value: Bool) -> MahaPhotoConfiguration {
-        allowMixSelect = value
+    func allowMixSelect(_ isEnabled: Bool) -> MahaPhotoConfiguration {
+        allowMixSelect = isEnabled
         return self
     }
     
     @discardableResult
-    func maxPreviewCount(_ count: Int) -> MahaPhotoConfiguration {
-        maxPreviewCount = count
+    func maxPreviewCount(_ maximumCount: Int) -> MahaPhotoConfiguration {
+        maxPreviewCount = maximumCount
         return self
     }
     

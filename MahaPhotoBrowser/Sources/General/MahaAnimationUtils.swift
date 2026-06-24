@@ -33,7 +33,14 @@ class MahaAnimationUtils: NSObject {
         case rotate = "transform.rotation"
         case path
     }
-    
+
+    private static let springScaleValues: [CATransform3D] = [
+        CATransform3DMakeScale(0.7, 0.7, 1),
+        CATransform3DMakeScale(1.15, 1.15, 1),
+        CATransform3DMakeScale(0.9, 0.9, 1),
+        CATransform3DMakeScale(1, 1, 1)
+    ]
+
     class func animation(
         type: MahaAnimationUtils.AnimationType,
         fromValue: Any?,
@@ -52,19 +59,14 @@ class MahaAnimationUtils: NSObject {
         animation.timingFunction = timingFunction
         return animation
     }
-    
+
     class func springAnimation() -> CAKeyframeAnimation {
-        let animate = CAKeyframeAnimation(keyPath: "transform")
-        animate.duration = MahaPhotoUIConfiguration.default().selectBtnAnimationDuration
-        animate.isRemovedOnCompletion = true
-        animate.fillMode = .forwards
-        
-        animate.values = [
-            CATransform3DMakeScale(0.7, 0.7, 1),
-            CATransform3DMakeScale(1.15, 1.15, 1),
-            CATransform3DMakeScale(0.9, 0.9, 1),
-            CATransform3DMakeScale(1, 1, 1)
-        ]
-        return animate
+        let animation = CAKeyframeAnimation(keyPath: "transform")
+        animation.duration = MahaPhotoUIConfiguration.default().selectBtnAnimationDuration
+        animation.isRemovedOnCompletion = true
+        animation.fillMode = .forwards
+
+        animation.values = springScaleValues
+        return animation
     }
 }

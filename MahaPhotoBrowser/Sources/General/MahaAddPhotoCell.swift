@@ -28,40 +28,43 @@ import UIKit
 import Foundation
 
 class MahaAddPhotoCell: UICollectionViewCell {
+    private let imageScale: CGFloat = 1.0 / 3.0
+
     private lazy var imageView: UIImageView = {
         let view = UIImageView(image: .maha.getImage("zl_addPhoto"))
         view.contentMode = .scaleAspectFit
         view.clipsToBounds = true
         return view
     }()
-    
+
     override init(frame: CGRect) {
         super.init(frame: frame)
         setupUI()
     }
-    
+
     deinit {
         mahaDebugPrint("MahaAddPhotoCell deinit")
     }
-    
+
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-    
+
     override func layoutSubviews() {
         super.layoutSubviews()
-        
-        imageView.frame = CGRect(x: 0, y: 0, width: bounds.width / 3, height: bounds.width / 3)
+
+        let imageLength = bounds.width * imageScale
+        imageView.frame = CGRect(x: 0, y: 0, width: imageLength, height: imageLength)
         imageView.center = CGPoint(x: bounds.midX, y: bounds.midY)
     }
-    
-    func setupUI() {
+
+    private func setupUI() {
         if MahaPhotoUIConfiguration.default().cellCornerRadio > 0 {
             layer.masksToBounds = true
             layer.cornerRadius = MahaPhotoUIConfiguration.default().cellCornerRadio
         }
-        
+
         backgroundColor = .maha.cameraCellBgColor
         contentView.addSubview(imageView)
     }

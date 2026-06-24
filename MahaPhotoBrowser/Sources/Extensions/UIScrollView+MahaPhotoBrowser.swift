@@ -40,9 +40,9 @@ extension MahaPhotoBrowserWrapper where Base: UIScrollView {
     }
     
     func scrollToBottom(animated: Bool = true) {
-        let contentSizeH = base.contentSize.height
-        let insetBottom = contentInset.bottom
-        let offsetY = contentSizeH + insetBottom - base.maha.height
+        let contentHeight = base.contentSize.height
+        let bottomInset = contentInset.bottom
+        let offsetY = contentHeight + bottomInset - base.maha.height
         base.setContentOffset(CGPoint(x: 0, y: offsetY), animated: animated)
     }
 }

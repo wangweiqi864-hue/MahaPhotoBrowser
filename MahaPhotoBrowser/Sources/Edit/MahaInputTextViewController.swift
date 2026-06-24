@@ -28,43 +28,43 @@ import UIKit
 
 class MahaInputTextViewController: UIViewController {
     private static let toolViewHeight: CGFloat = 70
-    
+
     private let image: UIImage?
-    
+
     private var text: String
-    
+
     private var font: UIFont = .boldSystemFont(ofSize: MahaTextStickerView.fontSize)
-    
+
     private var currentColor: UIColor {
         didSet {
-            textView.typingAttributes = attribute
+            textView.typingAttributes = typingAttributes
             strokeTextView.strokeColor = currentColor
             strokeTextView.setNeedsDisplay()
-            refreshTextViewUI()
+            refreshTextAppearance()
         }
     }
-    
+
     private var textStyle: MahaInputTextStyle {
         didSet {
-            textView.typingAttributes = attribute
+            textView.typingAttributes = typingAttributes
             strokeTextView.isHidden = textStyle != .stroke
             strokeTextView.setNeedsDisplay()
         }
     }
-    
+
     private lazy var bgImageView: UIImageView = {
         let view = UIImageView(image: image?.maha.blurImage(level: 4))
         view.contentMode = .scaleAspectFit
         return view
     }()
-    
+
     private lazy var coverView: UIView = {
         let view = UIView()
         view.backgroundColor = .black
         view.alpha = 0.4
         return view
     }()
-    
+
     private lazy var cancelBtn: UIButton = {
         let btn = UIButton(type: .custom)
         btn.setTitle(localLanguageTextValue(.cancel), for: .normal)
@@ -73,7 +73,7 @@ class MahaInputTextViewController: UIViewController {
         btn.addTarget(self, action: #selector(cancelBtnClick), for: .touchUpInside)
         return btn
     }()
-    
+
     private lazy var doneBtn: UIButton = {
         let btn = UIButton(type: .custom)
         btn.setTitle(localLanguageTextValue(.inputDone), for: .normal)
@@ -85,16 +85,16 @@ class MahaInputTextViewController: UIViewController {
         btn.layer.cornerRadius = MahaLayout.bottomToolBtnCornerRadius
         return btn
     }()
-    
-    private var attribute: [NSAttributedString.Key: Any] {
+
+    private var typingAttributes: [NSAttributedString.Key: Any] {
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.lineSpacing = 2
-        var att: [NSAttributedString.Key: Any] = [
+        var attributes: [NSAttributedString.Key: Any] = [
             .font: font,
             .paragraphStyle: paragraphStyle
         ]
         var foregroundColor = currentColor
-        
+
         if textStyle == .bg {
             if currentColor == .white {
                 foregroundColor = .black
@@ -108,13 +108,13 @@ class MahaInputTextViewController: UIViewController {
             shadow.shadowColor = UIColor.black
             shadow.shadowOffset = CGSize(width: 2, height: 2)
             shadow.shadowBlurRadius = 3
-            att[.shadow] = shadow
+            attributes[.shadow] = shadow
         }
-        
-        att[.foregroundColor] = foregroundColor
-        return att
+
+        attributes[.foregroundColor] = foregroundColor
+        return attributes
     }
-    
+
     private lazy var textView: UITextView = {
         let textView = UITextView()
         textView.keyboardAppearance = .dark
@@ -122,14 +122,14 @@ class MahaInputTextViewController: UIViewController {
         textView.delegate = self
         textView.backgroundColor = .clear
         textView.tintColor = .maha.bottomToolViewBtnNormalBgColor
-        textView.attributedText = NSAttributedString(string: text, attributes: attribute)
-        textView.typingAttributes = attribute
+        textView.attributedText = NSAttributedString(string: text, attributes: typingAttributes)
+        textView.typingAttributes = typingAttributes
         textView.textContainerInset = UIEdgeInsets(top: 8, left: 10, bottom: 8, right: 10)
         textView.textContainer.lineFragmentPadding = 0
         textView.layoutManager.delegate = self
         return textView
     }()
-    
+
     private lazy var strokeTextView: MahaStrokeTextView = {
         let view = MahaStrokeTextView()
         view.backgroundColor = .clear
@@ -139,20 +139,20 @@ class MahaInputTextViewController: UIViewController {
         view.isHidden = textStyle != .stroke
         return view
     }()
-    
+
     private lazy var toolView = UIView(frame: CGRect(
         x: 0,
         y: view.maha.height - Self.toolViewHeight,
         width: view.maha.width,
         height: Self.toolViewHeight
     ))
-    
+
     private lazy var textStyleBtn: UIButton = {
         let btn = UIButton(type: .custom)
         btn.addTarget(self, action: #selector(textStyleBtnClick), for: .touchUpInside)
         return btn
     }()
-    
+
     private lazy var collectionView: UICollectionView = {
         let layout = MahaCollectionViewFlowLayout()
         layout.itemSize = CGSize(width: 36, height: 36)
@@ -161,7 +161,7 @@ class MahaInputTextViewController: UIViewController {
         layout.scrollDirection = .horizontal
         let inset = (Self.toolViewHeight - layout.itemSize.height) / 2
         layout.sectionInset = UIEdgeInsets(top: inset, left: 0, bottom: inset, right: 0)
-        
+
         let collectionView = UICollectionView(
             frame: .zero,
             collectionViewLayout: layout
@@ -170,36 +170,36 @@ class MahaInputTextViewController: UIViewController {
         collectionView.delegate = self
         collectionView.dataSource = self
         MahaDrawColorCell.maha.register(collectionView)
-        
+
         return collectionView
     }()
-    
-    private var shouldLayout = true
-    
-    private lazy var textLayer = CAShapeLayer()
-    
-    private let textLayerRadius: CGFloat = 10
-    
+
+    private var needsLayoutUpdate = true
+
+    private lazy var textBackgroundLayer = CAShapeLayer()
+
+    private let textBackgroundCornerRadius: CGFloat = 10
+
     private let maxTextCount = 100
-    
-    private var frameObservation: NSKeyValueObservation?
-    
+
+    private var textContainerFrameObservation: NSKeyValueObservation?
+
     /// text, textColor, image, style
     var endInput: ((String, UIColor, UIFont, UIImage?, MahaInputTextStyle) -> Void)?
-    
+
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
         deviceIsiPhone() ? .portrait : .all
     }
-    
+
     override var prefersStatusBarHidden: Bool {
         return true
     }
-    
+
     deinit {
-        frameObservation?.invalidate()
+        textContainerFrameObservation?.invalidate()
         mahaDebugPrint("MahaInputTextViewController deinit")
     }
-    
+
     init(image: UIImage?, text: String? = nil, textColor: UIColor? = nil, font: UIFont? = nil, style: MahaInputTextStyle = .normal) {
         self.image = image
         self.text = text ?? ""
@@ -219,34 +219,34 @@ class MahaInputTextViewController: UIViewController {
         textStyle = style
         super.init(nibName: nil, bundle: nil)
     }
-    
+
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-    
+
     override func viewDidLoad() {
         super.viewDidLoad()
 
         setupUI()
-        
+
         NotificationCenter.default.addObserver(self, selector: #selector(keyboardWillShow(_:)), name: UIApplication.keyboardWillShowNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(keyboardWillHide(_:)), name: UIApplication.keyboardWillHideNotification, object: nil)
     }
-    
+
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         textView.becomeFirstResponder()
     }
-    
+
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        
-        guard shouldLayout else { return }
-        
-        shouldLayout = false
+
+        guard needsLayoutUpdate else { return }
+
+        needsLayoutUpdate = false
         bgImageView.frame = view.bounds
-        
+
         // iPad图片由竖屏切换到横屏时候填充方式会有点异常，这里重置下
         if deviceIsiPad() {
             if UIApplication.shared.statusBarOrientation.isLandscape {
@@ -255,22 +255,22 @@ class MahaInputTextViewController: UIViewController {
                 bgImageView.contentMode = .scaleAspectFit
             }
         }
-        
+
         coverView.frame = bgImageView.bounds
-        
+
         let btnY = max(deviceSafeAreaInsets().top, 20)
         let cancelBtnW = localLanguageTextValue(.cancel).maha.boundingRect(font: MahaLayout.bottomToolTitleFont, limitSize: CGSize(width: .greatestFiniteMagnitude, height: MahaLayout.bottomToolBtnH)).width + 20
         cancelBtn.frame = CGRect(x: 15, y: btnY, width: cancelBtnW, height: MahaLayout.bottomToolBtnH)
-        
+
         let doneBtnW = (doneBtn.currentTitle ?? "")
             .maha.boundingRect(
                 font: MahaLayout.bottomToolTitleFont,
                 limitSize: CGSize(width: .greatestFiniteMagnitude, height: MahaLayout.bottomToolBtnH)
             ).width + 20
         doneBtn.frame = CGRect(x: view.maha.width - 20 - doneBtnW, y: btnY, width: doneBtnW, height: MahaLayout.bottomToolBtnH)
-        
+
         textView.frame = CGRect(x: 10, y: doneBtn.maha.bottom + 30, width: view.maha.width - 20, height: 200)
-        
+
         textStyleBtn.frame = CGRect(
             x: 12,
             y: 0,
@@ -283,38 +283,38 @@ class MahaInputTextViewController: UIViewController {
             width: view.maha.width - textStyleBtn.maha.right - 5 - 24,
             height: Self.toolViewHeight
         )
-        
+
         for subview in textView.subviews {
             if NSStringFromClass(subview.classForCoder) == "_UITextContainerView" {
                 textView.insertSubview(strokeTextView, belowSubview: subview)
                 refreshStrokeTextViewFrame(for: subview)
-                
-                frameObservation?.invalidate()
-                frameObservation = subview.observe(
+
+                textContainerFrameObservation?.invalidate()
+                textContainerFrameObservation = subview.observe(
                     \.frame,
                      options: .new,
                      changeHandler: { object, change in
                          self.refreshStrokeTextViewFrame(for: subview)
                      }
                 )
-                
+
                 break
             }
         }
-        
+
         if let index = MahaPhotoConfiguration.default().editImageConfiguration.textStickerTextColors.firstIndex(where: { $0 == self.currentColor }) {
             collectionView.scrollToItem(at: IndexPath(row: index, section: 0), at: .centeredHorizontally, animated: false)
         }
     }
-    
+
     override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
         super.viewWillTransition(to: size, with: coordinator)
-        shouldLayout = true
+        needsLayoutUpdate = true
     }
-    
+
     private func setupUI() {
         view.backgroundColor = .black
-        
+
         view.addSubview(bgImageView)
         bgImageView.addSubview(coverView)
         view.addSubview(cancelBtn)
@@ -323,55 +323,55 @@ class MahaInputTextViewController: UIViewController {
         view.addSubview(toolView)
         toolView.addSubview(textStyleBtn)
         toolView.addSubview(collectionView)
-        
+
         // 这个要放到这里，不能放到懒加载里，因为放到懒加载里会触发layoutManager(_:, didCompleteLayoutFor:,atEnd)，导致循环调用
         textView.textAlignment = .left
-        
-        refreshTextViewUI()
+
+        refreshTextAppearance()
     }
-    
+
     private func refreshStrokeTextViewFrame(for containerView: UIView) {
         var rect = self.textView.convert(containerView.frame, from: containerView)
         rect = rect.insetBy(dx: textView.textContainerInset.left, dy: 0)
         rect.origin.y += textView.textContainerInset.top + 0.5
         self.strokeTextView.frame = rect
     }
-    
-    private func refreshTextViewUI() {
+
+    private func refreshTextAppearance() {
         textStyleBtn.setImage(textStyle.btnImage, for: .normal)
         textStyleBtn.setImage(textStyle.btnImage, for: .highlighted)
-        
+
         drawTextBackground()
-        
+
         guard textView.text != nil else { return }
-        
-        textView.attributedText = NSAttributedString(string: textView.text, attributes: attribute)
+
+        textView.attributedText = NSAttributedString(string: textView.text, attributes: typingAttributes)
     }
-    
+
     @objc private func textStyleBtnClick() {
         textStyle = textStyle.next
-        refreshTextViewUI()
+        refreshTextAppearance()
     }
-    
+
     @objc private func cancelBtnClick() {
         dismiss(animated: true, completion: nil)
     }
-    
+
     @objc private func doneBtnClick() {
         textView.tintColor = .clear
         textView.endEditing(true)
 
         var image: UIImage?
-        
+
         if !textView.text.isEmpty {
             for subview in textView.subviews {
                 if NSStringFromClass(subview.classForCoder) == "_UITextContainerView" {
-                    let size = textView.sizeThatFits(subview.frame.size)
-                    image = UIGraphicsImageRenderer.maha.renderImage(size: size) { context in
+                    let renderedImageSize = textView.sizeThatFits(subview.frame.size)
+                    image = UIGraphicsImageRenderer.maha.renderImage(size: renderedImageSize) { context in
                         if textStyle == .bg {
-                            textLayer.render(in: context)
+                            textBackgroundLayer.render(in: context)
                         }
-                        
+
                         var offsetX: CGFloat = 0
                         var offsetY: CGFloat = 0
                         if textStyle == .stroke {
@@ -381,56 +381,55 @@ class MahaInputTextViewController: UIViewController {
                             offsetY = -frame.minY
                             strokeTextView.layer.render(in: context)
                         }
-                        
+
                         context.translateBy(x: offsetX, y: offsetY)
                         subview.layer.render(in: context)
                     }
                 }
             }
         }
-        
+
         endInput?(textView.text, currentColor, font, image, textStyle)
         dismiss(animated: true, completion: nil)
     }
-    
+
     @objc private func keyboardWillShow(_ notify: Notification) {
         let rect = notify.userInfo?[UIApplication.keyboardFrameEndUserInfoKey] as? CGRect
         let keyboardH = rect?.height ?? 366
         let duration: TimeInterval = notify.userInfo?[UIApplication.keyboardAnimationDurationUserInfoKey] as? TimeInterval ?? 0.25
-        
-        let toolViewFrame = CGRect(
-            x: 0,
-            y: view.maha.height - keyboardH - Self.toolViewHeight,
-            width: view.maha.width,
-            height: Self.toolViewHeight
-        )
-        
+
+        let toolViewFrame = makeToolViewFrame(bottomOffset: keyboardH)
+
         var textViewFrame = textView.frame
         textViewFrame.size.height = toolViewFrame.minY - textViewFrame.minY - 20
-        
+
         UIView.animate(withDuration: max(duration, 0.25)) {
             self.toolView.frame = toolViewFrame
             self.textView.frame = textViewFrame
         }
     }
-    
+
     @objc private func keyboardWillHide(_ notify: Notification) {
         let duration: TimeInterval = notify.userInfo?[UIApplication.keyboardAnimationDurationUserInfoKey] as? TimeInterval ?? 0.25
-        
-        let toolViewFrame = CGRect(
-            x: 0,
-            y: view.maha.height - deviceSafeAreaInsets().bottom - Self.toolViewHeight,
-            width: view.maha.width,
-            height: Self.toolViewHeight
-        )
-        
+
+        let toolViewFrame = makeToolViewFrame(bottomOffset: deviceSafeAreaInsets().bottom)
+
         var textViewFrame = textView.frame
         textViewFrame.size.height = toolViewFrame.minY - textViewFrame.minY - 20
-        
+
         UIView.animate(withDuration: max(duration, 0.25)) {
             self.toolView.frame = toolViewFrame
             self.textView.frame = textViewFrame
         }
+    }
+
+    private func makeToolViewFrame(bottomOffset: CGFloat) -> CGRect {
+        CGRect(
+            x: 0,
+            y: view.maha.height - bottomOffset - Self.toolViewHeight,
+            width: view.maha.width,
+            height: Self.toolViewHeight
+        )
     }
 }
 
@@ -438,23 +437,23 @@ extension MahaInputTextViewController: UICollectionViewDelegate, UICollectionVie
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
         return MahaPhotoConfiguration.default().editImageConfiguration.textStickerTextColors.count
     }
-    
+
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         let cell = collectionView.dequeueReusableCell(withReuseIdentifier: MahaDrawColorCell.maha.identifier, for: indexPath) as! MahaDrawColorCell
-        
-        let c = MahaPhotoConfiguration.default().editImageConfiguration.textStickerTextColors[indexPath.row]
-        cell.color = c
-        if c == currentColor {
+
+        let color = MahaPhotoConfiguration.default().editImageConfiguration.textStickerTextColors[indexPath.row]
+        cell.color = color
+        if color == currentColor {
             cell.bgWhiteView.layer.transform = CATransform3DMakeScale(1.33, 1.33, 1)
             cell.colorView.layer.transform = CATransform3DMakeScale(1.2, 1.2, 1)
         } else {
             cell.bgWhiteView.layer.transform = CATransform3DIdentity
             cell.colorView.layer.transform = CATransform3DIdentity
         }
-        
+
         return cell
     }
-    
+
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         currentColor = MahaPhotoConfiguration.default().editImageConfiguration.textStickerTextColors[indexPath.row]
         collectionView.scrollToItem(at: indexPath, at: .centeredHorizontally, animated: true)
@@ -467,115 +466,115 @@ extension MahaInputTextViewController: UICollectionViewDelegate, UICollectionVie
 extension MahaInputTextViewController {
     private func drawTextBackground() {
         guard textStyle == .bg, !textView.text.isEmpty else {
-            textLayer.removeFromSuperlayer()
+            textBackgroundLayer.removeFromSuperlayer()
             return
         }
-        
-        let rects = calculateTextRects()
-        
+
+        let textRects = calculateTextRects()
+
         let path = UIBezierPath()
-        for (index, rect) in rects.enumerated() {
+        for (index, rect) in textRects.enumerated() {
             if index == 0 {
-                path.move(to: CGPoint(x: rect.minX, y: rect.minY + textLayerRadius))
-                path.addArc(withCenter: CGPoint(x: rect.minX + textLayerRadius, y: rect.minY + textLayerRadius), radius: textLayerRadius, startAngle: .pi, endAngle: .pi * 1.5, clockwise: true)
-                path.addLine(to: CGPoint(x: rect.maxX - textLayerRadius, y: rect.minY))
-                path.addArc(withCenter: CGPoint(x: rect.maxX - textLayerRadius, y: rect.minY + textLayerRadius), radius: textLayerRadius, startAngle: .pi * 1.5, endAngle: .pi * 2, clockwise: true)
+                path.move(to: CGPoint(x: rect.minX, y: rect.minY + textBackgroundCornerRadius))
+                path.addArc(withCenter: CGPoint(x: rect.minX + textBackgroundCornerRadius, y: rect.minY + textBackgroundCornerRadius), radius: textBackgroundCornerRadius, startAngle: .pi, endAngle: .pi * 1.5, clockwise: true)
+                path.addLine(to: CGPoint(x: rect.maxX - textBackgroundCornerRadius, y: rect.minY))
+                path.addArc(withCenter: CGPoint(x: rect.maxX - textBackgroundCornerRadius, y: rect.minY + textBackgroundCornerRadius), radius: textBackgroundCornerRadius, startAngle: .pi * 1.5, endAngle: .pi * 2, clockwise: true)
             } else {
-                let preRect = rects[index - 1]
-                if rect.maxX > preRect.maxX {
-                    path.addLine(to: CGPoint(x: preRect.maxX, y: rect.minY - textLayerRadius))
-                    path.addArc(withCenter: CGPoint(x: preRect.maxX + textLayerRadius, y: rect.minY - textLayerRadius), radius: textLayerRadius, startAngle: -.pi, endAngle: -.pi * 1.5, clockwise: false)
-                    path.addLine(to: CGPoint(x: rect.maxX - textLayerRadius, y: rect.minY))
-                    path.addArc(withCenter: CGPoint(x: rect.maxX - textLayerRadius, y: rect.minY + textLayerRadius), radius: textLayerRadius, startAngle: .pi * 1.5, endAngle: .pi * 2, clockwise: true)
-                } else if rect.maxX < preRect.maxX {
-                    path.addLine(to: CGPoint(x: preRect.maxX, y: preRect.maxY - textLayerRadius))
-                    path.addArc(withCenter: CGPoint(x: preRect.maxX - textLayerRadius, y: preRect.maxY - textLayerRadius), radius: textLayerRadius, startAngle: 0, endAngle: .pi / 2, clockwise: true)
-                    path.addLine(to: CGPoint(x: rect.maxX + textLayerRadius, y: preRect.maxY))
-                    path.addArc(withCenter: CGPoint(x: rect.maxX + textLayerRadius, y: preRect.maxY + textLayerRadius), radius: textLayerRadius, startAngle: -.pi / 2, endAngle: -.pi, clockwise: false)
+                let previousRect = textRects[index - 1]
+                if rect.maxX > previousRect.maxX {
+                    path.addLine(to: CGPoint(x: previousRect.maxX, y: rect.minY - textBackgroundCornerRadius))
+                    path.addArc(withCenter: CGPoint(x: previousRect.maxX + textBackgroundCornerRadius, y: rect.minY - textBackgroundCornerRadius), radius: textBackgroundCornerRadius, startAngle: -.pi, endAngle: -.pi * 1.5, clockwise: false)
+                    path.addLine(to: CGPoint(x: rect.maxX - textBackgroundCornerRadius, y: rect.minY))
+                    path.addArc(withCenter: CGPoint(x: rect.maxX - textBackgroundCornerRadius, y: rect.minY + textBackgroundCornerRadius), radius: textBackgroundCornerRadius, startAngle: .pi * 1.5, endAngle: .pi * 2, clockwise: true)
+                } else if rect.maxX < previousRect.maxX {
+                    path.addLine(to: CGPoint(x: previousRect.maxX, y: previousRect.maxY - textBackgroundCornerRadius))
+                    path.addArc(withCenter: CGPoint(x: previousRect.maxX - textBackgroundCornerRadius, y: previousRect.maxY - textBackgroundCornerRadius), radius: textBackgroundCornerRadius, startAngle: 0, endAngle: .pi / 2, clockwise: true)
+                    path.addLine(to: CGPoint(x: rect.maxX + textBackgroundCornerRadius, y: previousRect.maxY))
+                    path.addArc(withCenter: CGPoint(x: rect.maxX + textBackgroundCornerRadius, y: previousRect.maxY + textBackgroundCornerRadius), radius: textBackgroundCornerRadius, startAngle: -.pi / 2, endAngle: -.pi, clockwise: false)
                 } else {
-                    path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY + textLayerRadius))
+                    path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY + textBackgroundCornerRadius))
                 }
             }
-            
-            if index == rects.count - 1 {
-                path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - textLayerRadius))
-                path.addArc(withCenter: CGPoint(x: rect.maxX - textLayerRadius, y: rect.maxY - textLayerRadius), radius: textLayerRadius, startAngle: 0, endAngle: .pi / 2, clockwise: true)
-                path.addLine(to: CGPoint(x: rect.minX + textLayerRadius, y: rect.maxY))
-                path.addArc(withCenter: CGPoint(x: rect.minX + textLayerRadius, y: rect.maxY - textLayerRadius), radius: textLayerRadius, startAngle: .pi / 2, endAngle: .pi, clockwise: true)
-                
-                let firstRect = rects[0]
-                path.addLine(to: CGPoint(x: firstRect.minX, y: firstRect.minY + textLayerRadius))
+
+            if index == textRects.count - 1 {
+                path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - textBackgroundCornerRadius))
+                path.addArc(withCenter: CGPoint(x: rect.maxX - textBackgroundCornerRadius, y: rect.maxY - textBackgroundCornerRadius), radius: textBackgroundCornerRadius, startAngle: 0, endAngle: .pi / 2, clockwise: true)
+                path.addLine(to: CGPoint(x: rect.minX + textBackgroundCornerRadius, y: rect.maxY))
+                path.addArc(withCenter: CGPoint(x: rect.minX + textBackgroundCornerRadius, y: rect.maxY - textBackgroundCornerRadius), radius: textBackgroundCornerRadius, startAngle: .pi / 2, endAngle: .pi, clockwise: true)
+
+                let firstRect = textRects[0]
+                path.addLine(to: CGPoint(x: firstRect.minX, y: firstRect.minY + textBackgroundCornerRadius))
                 path.close()
             }
         }
-        
-        textLayer.path = path.cgPath
-        textLayer.fillColor = currentColor.cgColor
-        if textLayer.superlayer == nil {
-            textView.layer.insertSublayer(textLayer, at: 0)
+
+        textBackgroundLayer.path = path.cgPath
+        textBackgroundLayer.fillColor = currentColor.cgColor
+        if textBackgroundLayer.superlayer == nil {
+            textView.layer.insertSublayer(textBackgroundLayer, at: 0)
         }
     }
-    
+
     private func calculateTextRects() -> [CGRect] {
         let layoutManager = textView.layoutManager
-        
+
         // 这里必须用utf16.count 或者 (text as NSString).length，因为用count的话不准，一个emoji表情的count为2或更大
         let range = layoutManager.glyphRange(forCharacterRange: NSMakeRange(0, textView.text.utf16.count), actualCharacterRange: nil)
         let glyphRange = layoutManager.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
-        
+
         var rects: [CGRect] = []
-        
+
         let insetLeft = textView.textContainerInset.left
         let insetTop = textView.textContainerInset.top
         layoutManager.enumerateLineFragments(forGlyphRange: glyphRange) { _, usedRect, _, _, _ in
             rects.append(CGRect(x: usedRect.minX - 10 + insetLeft, y: usedRect.minY - 8 + insetTop, width: usedRect.width + 20, height: usedRect.height + 16))
         }
-        
+
         guard rects.count > 1 else {
             return rects
         }
-        
+
         for i in 1..<rects.count {
-            processRects(&rects, index: i, maxIndex: i)
+            normalizeAdjacentRects(&rects, index: i, maxIndex: i)
         }
-        
+
         return rects
     }
-    
-    private func processRects(_ rects: inout [CGRect], index: Int, maxIndex: Int) {
+
+    private func normalizeAdjacentRects(_ rects: inout [CGRect], index: Int, maxIndex: Int) {
         guard rects.count > 1, index > 0, index <= maxIndex else {
             return
         }
-        
+
         var preRect = rects[index - 1]
         var currRect = rects[index]
-        
+
         var preChanged = false
         var currChanged = false
-        
+
         // 当前rect宽度大于上方的rect，但差值小于2倍圆角
-        if currRect.width > preRect.width, currRect.width - preRect.width < 2 * textLayerRadius {
+        if currRect.width > preRect.width, currRect.width - preRect.width < 2 * textBackgroundCornerRadius {
             var size = preRect.size
             size.width = currRect.width
             preRect = CGRect(origin: preRect.origin, size: size)
             preChanged = true
         }
-        
-        if currRect.width < preRect.width, preRect.width - currRect.width < 2 * textLayerRadius {
+
+        if currRect.width < preRect.width, preRect.width - currRect.width < 2 * textBackgroundCornerRadius {
             var size = currRect.size
             size.width = preRect.width
             currRect = CGRect(origin: currRect.origin, size: size)
             currChanged = true
         }
-        
+
         if preChanged {
             rects[index - 1] = preRect
-            processRects(&rects, index: index - 1, maxIndex: maxIndex)
+            normalizeAdjacentRects(&rects, index: index - 1, maxIndex: maxIndex)
         }
-        
+
         if currChanged {
             rects[index] = currRect
-            processRects(&rects, index: index + 1, maxIndex: maxIndex)
+            normalizeAdjacentRects(&rects, index: index + 1, maxIndex: maxIndex)
         }
     }
 }
@@ -588,28 +587,28 @@ extension MahaInputTextViewController: UITextViewDelegate {
                 strokeTextView.setNeedsDisplay()
             }
         }
-        
+
         let markedTextRange = textView.markedTextRange
         guard markedTextRange == nil || (markedTextRange?.isEmpty ?? true) else {
             return
         }
-        
+
         let text = textView.text ?? ""
         if text.count > maxTextCount {
             let endIndex = text.index(text.startIndex, offsetBy: maxTextCount)
             textView.attributedText = NSAttributedString(
                 string: String(text[..<endIndex]),
-                attributes: attribute
+                attributes: typingAttributes
             )
         }
     }
-    
+
     func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
         if text == "\n" {
             doneBtnClick()
             return false
         }
-        
+
         return true
     }
 }
@@ -619,7 +618,7 @@ extension MahaInputTextViewController: NSLayoutManagerDelegate {
         guard layoutFinishedFlag else {
             return
         }
-        
+
         drawTextBackground()
     }
 }
@@ -629,7 +628,7 @@ public enum MahaInputTextStyle {
     case bg
     case stroke
     case shadow
-    
+
     fileprivate var next: MahaInputTextStyle {
         switch self {
         case .normal:
@@ -642,7 +641,7 @@ public enum MahaInputTextStyle {
             return.normal
         }
     }
-    
+
     fileprivate var btnImage: UIImage? {
         switch self {
         case .normal:
@@ -662,10 +661,10 @@ class MahaStrokeTextView: UIView {
     var strokeColor: UIColor = .white
     var strokeWidth: CGFloat = 4.0
     var text = ""
-    
+
     override func draw(_ rect: CGRect) {
         guard let context = UIGraphicsGetCurrentContext() else { return }
-        
+
         context.clear(bounds)
         context.saveGState()
         context.textMatrix = .identity
@@ -679,13 +678,13 @@ class MahaStrokeTextView: UIView {
             textColorARGB = (1, 1, 1, 1)
         }
         let fillColor = UIColor(red: textColorARGB.red * 0.45, green: textColorARGB.green * 0.45, blue: textColorARGB.blue * 0.5, alpha: 1)
-        
+
         context.setTextDrawingMode(.fillStroke)
         // 描边宽度
         context.setLineWidth(strokeWidth)
         context.setFillColor(fillColor.cgColor)
         context.setLineJoin(.round)
-        
+
         // 创建 Core Text 绘制
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.lineSpacing = 2.2
@@ -693,10 +692,10 @@ class MahaStrokeTextView: UIView {
 
         let framesetter = CTFramesetterCreateWithAttributedString(attributedString)
         let path = CGMutablePath()
-        
+
         path.addRect(bounds)
         let frame = CTFramesetterCreateFrame(framesetter, CFRangeMake(0, attributedString.length), path, nil)
-        
+
         // 绘制文本
         CTFrameDraw(frame, context)
         context.restoreGState()

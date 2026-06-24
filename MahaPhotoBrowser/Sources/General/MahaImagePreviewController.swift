@@ -47,9 +47,9 @@ public class MahaImagePreviewController: UIViewController {
     
     static let selPhotoPreviewH: CGFloat = 100
     
-    private let datas: [Any]
+    private let previewItems: [Any]
     
-    private var selectStatus: [Bool]
+    private var selectionStates: [Bool]
     
     private let urlType: ((URL) -> MahaURLType)?
     
@@ -61,7 +61,7 @@ public class MahaImagePreviewController: UIViewController {
 
     public private(set) var currentIndex: Int
     
-    private var indexBeforOrientationChanged: Int
+    private var indexBeforeOrientationChanged: Int
     
     lazy var collectionView: UICollectionView = {
         let layout = MahaCollectionViewFlowLayout()
@@ -85,12 +85,12 @@ public class MahaImagePreviewController: UIViewController {
         return view
     }()
     
-    private let navViewAlpha = 0.95
+    private let navigationViewAlpha = 0.95
     
     private lazy var navView: UIView = {
         let view = UIView()
         view.backgroundColor = .maha.navBarColorOfPreviewVC
-        view.alpha = navViewAlpha
+        view.alpha = navigationViewAlpha
         return view
     }()
     
@@ -150,11 +150,11 @@ public class MahaImagePreviewController: UIViewController {
     
     private var isFirstAppear = true
     
-    private var hideNavView = false
+    private var isNavigationHidden = false
     
     private var dismissInteractiveTransition: MahaImagePreviewDismissInteractiveTransition?
     
-    private var orientation: UIInterfaceOrientation = .unknown
+    private var currentOrientation: UIInterfaceOrientation = .unknown
     
     @objc public var delegate: MahaImagePreviewControllerDelegate?
     
@@ -195,11 +195,11 @@ public class MahaImagePreviewController: UIViewController {
         urlType: ((URL) -> MahaURLType)? = nil,
         urlImageLoader: MahaImageLoaderBlock? = nil
     ) {
-        let filterDatas = datas.filter { $0 is PHAsset || $0 is UIImage || $0 is URL }
-        self.datas = filterDatas
-        selectStatus = Array(repeating: true, count: filterDatas.count)
-        currentIndex = min(index, filterDatas.count - 1)
-        indexBeforOrientationChanged = currentIndex
+        let filteredPreviewItems = datas.filter { $0 is PHAsset || $0 is UIImage || $0 is URL }
+        previewItems = filteredPreviewItems
+        selectionStates = Array(repeating: true, count: filteredPreviewItems.count)
+        currentIndex = min(index, filteredPreviewItems.count - 1)
+        indexBeforeOrientationChanged = currentIndex
         self.showSelectBtn = showSelectBtn
         self.showBottomView = showSelectBtn ? true : showBottomView
         self.urlType = urlType
@@ -217,7 +217,7 @@ public class MahaImagePreviewController: UIViewController {
 
         setupUI()
         addDismissInteractiveTransition()
-        resetSubViewStatus()
+        refreshVisibleState()
     }
     
     override public func viewWillAppear(_ animated: Bool) {
@@ -232,7 +232,7 @@ public class MahaImagePreviewController: UIViewController {
         guard isFirstAppear else { return }
         isFirstAppear = false
         
-        reloadCurrentCell()
+        reloadCurrentPreviewCell()
     }
     
     override public func viewDidLayoutSubviews() {
@@ -247,7 +247,7 @@ public class MahaImagePreviewController: UIViewController {
         collectionView.frame = CGRect(
             x: -MahaPhotoPreviewController.colItemSpacing / 2,
             y: 0,
-            width: view.maha.width + MahaPhotoPreviewController.colItemSpacing,
+            width: view.maha.width + MahaImagePreviewController.colItemSpacing,
             height: view.maha.height
         )
         
@@ -270,14 +270,14 @@ public class MahaImagePreviewController: UIViewController {
         bottomView.frame = CGRect(x: 0, y: view.maha.height - insets.bottom - bottomViewH, width: view.maha.width, height: bottomViewH + insets.bottom)
         bottomBlurView?.frame = bottomView.bounds
         
-        resetBottomViewFrame()
+        updateBottomViewFrame()
         
-        let ori = UIApplication.shared.statusBarOrientation
-        if ori != orientation {
-            orientation = ori
+        let interfaceOrientation = UIApplication.shared.statusBarOrientation
+        if interfaceOrientation != currentOrientation {
+            currentOrientation = interfaceOrientation
             collectionView.setContentOffset(
                 CGPoint(
-                    x: (view.maha.width + MahaPhotoPreviewController.colItemSpacing) * CGFloat(indexBeforOrientationChanged),
+                    x: (view.maha.width + MahaImagePreviewController.colItemSpacing) * CGFloat(indexBeforeOrientationChanged),
                     y: 0
                 ),
                 animated: false
@@ -290,7 +290,7 @@ public class MahaImagePreviewController: UIViewController {
         collectionView.collectionViewLayout.invalidateLayout()
     }
     
-    private func reloadCurrentCell() {
+    private func reloadCurrentPreviewCell() {
         guard let cell = collectionView.cellForItem(at: IndexPath(row: currentIndex, section: 0)) else {
             return
         }
@@ -333,7 +333,7 @@ public class MahaImagePreviewController: UIViewController {
         dismissInteractiveTransition?.shouldStartTransition = { [weak self] point -> Bool in
             guard let `self` = self else { return false }
             
-            if !self.hideNavView, self.navView.frame.contains(point) ||
+            if !self.isNavigationHidden, self.navView.frame.contains(point) ||
                 self.bottomView.frame.contains(point) {
                 return false
             }
@@ -368,16 +368,16 @@ public class MahaImagePreviewController: UIViewController {
             let cell = self.collectionView.cellForItem(at: IndexPath(row: self.currentIndex, section: 0))
             
             if let cell = cell as? MahaNetVideoPreviewCell {
-                self.hideNavView = cell.isPlaying
+                self.isNavigationHidden = cell.isPlaying
             } else {
-                self.hideNavView = false
+                self.isNavigationHidden = false
             }
             
-            self.navView.isHidden = self.hideNavView
-            self.bottomView.isHidden = self.hideNavView
+            self.navView.isHidden = self.isNavigationHidden
+            self.bottomView.isHidden = self.isNavigationHidden
             
             UIView.animate(withDuration: 0.5) {
-                self.navView.alpha = self.navViewAlpha
+                self.navView.alpha = self.navigationViewAlpha
                 self.bottomView.alpha = 1
             }
             
@@ -387,19 +387,19 @@ public class MahaImagePreviewController: UIViewController {
         }
     }
     
-    private func resetSubViewStatus() {
-        indexLabel.text = String(currentIndex + 1) + " / " + String(datas.count)
+    private func refreshVisibleState() {
+        indexLabel.text = String(currentIndex + 1) + " / " + String(previewItems.count)
         
         if showSelectBtn {
-            selectBtn.isSelected = selectStatus[currentIndex]
+            selectBtn.isSelected = selectionStates[currentIndex]
         } else {
             selectBtn.isHidden = true
         }
         
-        resetBottomViewFrame()
+        updateBottomViewFrame()
     }
     
-    private func resetBottomViewFrame() {
+    private func updateBottomViewFrame() {
         guard showBottomView else {
             bottomView.isHidden = true
             return
@@ -408,18 +408,18 @@ public class MahaImagePreviewController: UIViewController {
         let btnY = MahaLayout.bottomToolBtnY
         
         var doneTitle = localLanguageTextValue(.done)
-        let selCount = selectStatus.filter { $0 }.count
+        let selectedCount = selectionStates.filter { $0 }.count
         if showSelectBtn,
            MahaPhotoConfiguration.default().showSelectCountOnDoneBtn,
-           selCount > 0 {
-            doneTitle += "(" + String(selCount) + ")"
+           selectedCount > 0 {
+            doneTitle += "(" + String(selectedCount) + ")"
         }
         let doneBtnW = doneTitle.maha.boundingRect(font: MahaLayout.bottomToolTitleFont, limitSize: CGSize(width: CGFloat.greatestFiniteMagnitude, height: 30)).width + 20
         doneBtn.frame = CGRect(x: bottomView.bounds.width - doneBtnW - 15, y: btnY, width: doneBtnW, height: MahaLayout.bottomToolBtnH)
         doneBtn.setTitle(doneTitle, for: .normal)
     }
     
-    private func dismiss() {
+    private func dismissPreview() {
         if let nav = navigationController {
             let vc = nav.popViewController(animated: true)
             if vc == nil {
@@ -433,11 +433,11 @@ public class MahaImagePreviewController: UIViewController {
     // MARK: btn actions
     
     @objc private func backBtnClick() {
-        dismiss()
+        dismissPreview()
     }
     
     @objc private func selectBtnClick() {
-        var isSelected = selectStatus[currentIndex]
+        var isSelected = selectionStates[currentIndex]
         selectBtn.layer.removeAllAnimations()
         if isSelected {
             isSelected = false
@@ -448,47 +448,47 @@ public class MahaImagePreviewController: UIViewController {
             isSelected = true
         }
         
-        selectStatus[currentIndex] = isSelected
-        resetSubViewStatus()
+        selectionStates[currentIndex] = isSelected
+        refreshVisibleState()
     }
     
     @objc private func doneBtnClick() {
         if showSelectBtn {
-            let res = datas.enumerated()
-                .filter { self.selectStatus[$0.offset] }
+            let res = previewItems.enumerated()
+                .filter { self.selectionStates[$0.offset] }
                 .map { $0.element }
             
             doneBlock?(res)
         } else {
-            doneBlock?(datas)
+            doneBlock?(previewItems)
         }
         
-        dismiss()
+        dismissPreview()
     }
     
     private func tapPreviewCell() {
-        hideNavView.toggle()
+        isNavigationHidden.toggle()
         
         let cell = collectionView.cellForItem(at: IndexPath(row: currentIndex, section: 0))
         if let cell = cell as? MahaVideoPreviewCell, cell.isPlaying {
-            hideNavView = true
+            isNavigationHidden = true
         } else if let cell = cell as? MahaNetVideoPreviewCell, cell.isPlaying {
-            hideNavView = true
+            isNavigationHidden = true
         }
-        navView.isHidden = hideNavView
+        navView.isHidden = isNavigationHidden
         if showBottomView {
-            bottomView.isHidden = hideNavView
+            bottomView.isHidden = isNavigationHidden
         }
     }
 }
 
 extension MahaImagePreviewController: UIViewControllerTransitioningDelegate {
     public func animationController(forDismissed dismissed: UIViewController) -> UIViewControllerAnimatedTransitioning? {
-        return dismissInteractiveTransition?.interactive == true ? MahaPhotoPreviewAnimatedTransition() : nil
+        return dismissInteractiveTransition?.isInteractive == true ? MahaPhotoPreviewAnimatedTransition() : nil
     }
     
     public func interactionControllerForDismissal(using animator: UIViewControllerAnimatedTransitioning) -> UIViewControllerInteractiveTransitioning? {
-        return dismissInteractiveTransition?.interactive == true ? dismissInteractiveTransition : nil
+        return dismissInteractiveTransition?.isInteractive == true ? dismissInteractiveTransition : nil
     }
 }
 
@@ -505,17 +505,17 @@ public extension MahaImagePreviewController {
         NotificationCenter.default.post(name: MahaPhotoPreviewController.previewVCScrollNotification, object: nil)
         let offset = scrollView.contentOffset
         var page = Int(round(offset.x / (view.bounds.width + MahaPhotoPreviewController.colItemSpacing)))
-        page = max(0, min(page, datas.count - 1))
+        page = max(0, min(page, previewItems.count - 1))
         if page == currentIndex {
             return
         }
         
         currentIndex = page
-        resetSubViewStatus()
+        refreshVisibleState()
     }
     
     func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
-        indexBeforOrientationChanged = currentIndex
+        indexBeforeOrientationChanged = currentIndex
         let cell = collectionView.cellForItem(at: IndexPath(row: currentIndex, section: 0))
         if let cell = cell as? MahaGifPreviewCell {
             cell.loadGifWhenCellDisplaying()
@@ -543,16 +543,16 @@ extension MahaImagePreviewController: UICollectionViewDataSource, UICollectionVi
     }
     
     public func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        return datas.count
+        return previewItems.count
     }
     
     public func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         let config = MahaPhotoConfiguration.default()
-        let obj = datas[indexPath.row]
+        let previewItem = previewItems[indexPath.row]
         
         let baseCell: MahaPreviewBaseCell
         
-        if let asset = obj as? PHAsset {
+        if let asset = previewItem as? PHAsset {
             let model = MahaPhotoModel(asset: asset)
             
             if config.allowSelectGif, model.type == .gif {
@@ -589,13 +589,13 @@ extension MahaImagePreviewController: UICollectionViewDataSource, UICollectionVi
             }
             
             return baseCell
-        } else if let image = obj as? UIImage {
+        } else if let image = previewItem as? UIImage {
             let cell = collectionView.dequeueReusableCell(withReuseIdentifier: MahaLocalImagePreviewCell.maha.identifier, for: indexPath) as! MahaLocalImagePreviewCell
             
             cell.image = image
             
             baseCell = cell
-        } else if let url = obj as? URL {
+        } else if let url = previewItem as? URL {
             let type: MahaURLType = urlType?(url) ?? .image
             if type == .image {
                 let cell = collectionView.dequeueReusableCell(withReuseIdentifier: MahaNetImagePreviewCell.maha.identifier, for: indexPath) as! MahaNetImagePreviewCell

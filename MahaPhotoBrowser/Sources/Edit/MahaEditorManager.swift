@@ -38,48 +38,48 @@ public enum MahaEditorAction {
 
 protocol MahaEditorManagerDelegate: AnyObject {
     func editorManager(_ manager: MahaEditorManager, didUpdateActions actions: [MahaEditorAction], redoActions: [MahaEditorAction])
-    
+
     func editorManager(_ manager: MahaEditorManager, undoAction action: MahaEditorAction)
-    
+
     func editorManager(_ manager: MahaEditorManager, redoAction action: MahaEditorAction)
 }
 
 class MahaEditorManager {
     private(set) var actions: [MahaEditorAction] = []
     private(set) var redoActions: [MahaEditorAction] = []
-    
+
     weak var delegate: MahaEditorManagerDelegate?
-    
+
     init(actions: [MahaEditorAction] = []) {
         self.actions = actions
         redoActions = actions
     }
-    
+
     func storeAction(_ action: MahaEditorAction) {
         actions.append(action)
         redoActions = actions
-        
-        deliverUpdate()
+
+        notifyDelegate()
     }
-    
+
     func undoAction() {
-        guard let preAction = actions.popLast() else { return }
-        
-        delegate?.editorManager(self, undoAction: preAction)
-        deliverUpdate()
+        guard let previousAction = actions.popLast() else { return }
+
+        delegate?.editorManager(self, undoAction: previousAction)
+        notifyDelegate()
     }
-    
+
     func redoAction() {
         guard actions.count < redoActions.count else { return }
-        
+
         let action = redoActions[actions.count]
         actions.append(action)
-        
+
         delegate?.editorManager(self, redoAction: action)
-        deliverUpdate()
+        notifyDelegate()
     }
-    
-    private func deliverUpdate() {
+
+    private func notifyDelegate() {
         delegate?.editorManager(self, didUpdateActions: actions, redoActions: redoActions)
     }
 }

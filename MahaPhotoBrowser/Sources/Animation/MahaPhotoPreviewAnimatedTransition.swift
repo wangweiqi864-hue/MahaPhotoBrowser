@@ -27,9 +27,11 @@
 import UIKit
 
 class MahaPhotoPreviewAnimatedTransition: NSObject, UIViewControllerAnimatedTransitioning {
+    private let animationDuration: TimeInterval = 0.25
+
     func transitionDuration(using transitionContext: UIViewControllerContextTransitioning?) -> TimeInterval {
-        return 0.25
+        animationDuration
     }
-    
+
     func animateTransition(using transitionContext: UIViewControllerContextTransitioning) {}
 }

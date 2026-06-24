@@ -49,7 +49,7 @@ public class MahaCustomAlertAction: NSObject {
 
 /// internal
 extension MahaCustomAlertStyle {
-    var toSystemAlertStyle: UIAlertController.Style {
+    var systemAlertStyle: UIAlertController.Style {
         switch self {
         case .alert:
             return .alert
@@ -61,7 +61,7 @@ extension MahaCustomAlertStyle {
 
 /// internal
 extension MahaCustomAlertAction.Style {
-    var toSystemAlertActionStyle: UIAlertAction.Style {
+    var systemAlertActionStyle: UIAlertAction.Style {
         switch self {
         case .default, .tint:
             return .default
@@ -75,8 +75,8 @@ extension MahaCustomAlertAction.Style {
 
 /// internal
 extension MahaCustomAlertAction {
-    func toSystemAlertAction() -> UIAlertAction {
-        return UIAlertAction(title: title, style: style.toSystemAlertActionStyle) { _ in
+    func makeSystemAlertAction() -> UIAlertAction {
+        return UIAlertAction(title: title, style: style.systemAlertActionStyle) { _ in
             self.handler?(self)
         }
     }

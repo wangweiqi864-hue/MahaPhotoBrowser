@@ -27,5 +27,11 @@
 import UIKit
 
 class MahaCollectionViewFlowLayout: UICollectionViewFlowLayout {
-    override var flipsHorizontallyInOppositeLayoutDirection: Bool { isRTL() }
+    override var flipsHorizontallyInOppositeLayoutDirection: Bool {
+        shouldFlipHorizontallyForRTL
+    }
+
+    private var shouldFlipHorizontallyForRTL: Bool {
+        isRTL()
+    }
 }

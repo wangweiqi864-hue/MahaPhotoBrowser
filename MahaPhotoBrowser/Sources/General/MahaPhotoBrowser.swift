@@ -45,19 +45,19 @@ public protocol MahaPhotoBrowserCompatibleValue { }
 extension MahaPhotoBrowserCompatible {
     public var maha: MahaPhotoBrowserWrapper<Self> {
         get { MahaPhotoBrowserWrapper(self) }
-        set { }
+        set {}
     }
     
     public static var maha: MahaPhotoBrowserWrapper<Self>.Type {
         get { MahaPhotoBrowserWrapper<Self>.self }
-        set { }
+        set {}
     }
 }
 
 extension MahaPhotoBrowserCompatibleValue {
     public var maha: MahaPhotoBrowserWrapper<Self> {
         get { MahaPhotoBrowserWrapper(self) }
-        set { }
+        set {}
     }
 }
 

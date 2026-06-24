@@ -28,24 +28,24 @@ import UIKit
 
 class MahaTextStickerView: MahaBaseStickerView {
     static let fontSize: CGFloat = 32
-    
+
     private static let edgeInset: CGFloat = 10
-    
+
     private lazy var imageView: UIImageView = {
         let view = UIImageView(image: image)
         view.contentMode = .scaleAspectFit
         view.clipsToBounds = true
         return view
     }()
-    
+
     var text: String
-    
+
     var textColor: UIColor
-    
+
     var font: UIFont?
-    
+
     var style: MahaInputTextStyle
-    
+
     var image: UIImage {
         didSet {
             imageView.image = image
@@ -64,16 +64,16 @@ class MahaTextStickerView: MahaBaseStickerView {
             originScale: originScale,
             originAngle: originAngle,
             originFrame: originFrame,
-            gesScale: gesScale,
-            gesRotation: gesRotation,
-            totalTranslationPoint: totalTranslationPoint
+            gesScale: currentGestureScale,
+            gesRotation: currentGestureRotation,
+            totalTranslationPoint: totalTranslation
         )
     }
-    
+
     deinit {
         mahaDebugPrint("MahaTextStickerView deinit")
     }
-    
+
     convenience init(state: MahaTextStickerState) {
         self.init(
             id: state.id,
@@ -91,7 +91,7 @@ class MahaTextStickerView: MahaBaseStickerView {
             showBorder: false
         )
     }
-    
+
     init(
         id: String = UUID().uuidString,
         text: String,
@@ -122,38 +122,38 @@ class MahaTextStickerView: MahaBaseStickerView {
             totalTranslationPoint: totalTranslationPoint,
             showBorder: showBorder
         )
-        
+
         borderView.addSubview(imageView)
     }
-    
+
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-    
+
     override func setupUIFrameWhenFirstLayout() {
         imageView.frame = borderView.bounds.insetBy(dx: Self.edgeInset, dy: Self.edgeInset)
     }
-    
+
     override func tapAction(_ ges: UITapGestureRecognizer) {
-        guard gesIsEnabled else { return }
-        
-        if let timer = timer, timer.isValid {
+        guard isGestureEnabled else { return }
+
+        if let borderHideTimer = borderHideTimer, borderHideTimer.isValid {
             delegate?.sticker(self, editText: text)
         } else {
             super.tapAction(ges)
         }
     }
-    
+
     func changeSize(to newSize: CGSize) {
         // Revert zoom scale.
         transform = transform.scaledBy(x: 1 / originScale, y: 1 / originScale)
         // Revert ges scale.
-        transform = transform.scaledBy(x: 1 / gesScale, y: 1 / gesScale)
+        transform = transform.scaledBy(x: 1 / currentGestureScale, y: 1 / currentGestureScale)
         // Revert ges rotation.
-        transform = transform.rotated(by: -gesRotation)
+        transform = transform.rotated(by: -currentGestureRotation)
         transform = transform.rotated(by: -originAngle.maha.toPi)
-        
+
         // Recalculate current frame.
         let center = CGPoint(x: self.frame.midX, y: self.frame.midY)
         var frame = self.frame
@@ -161,25 +161,25 @@ class MahaTextStickerView: MahaBaseStickerView {
         frame.origin.y = center.y - newSize.height / 2
         frame.size = newSize
         self.frame = frame
-        
+
         let oc = CGPoint(x: originFrame.midX, y: originFrame.midY)
         var of = originFrame
         of.origin.x = oc.x - newSize.width / 2
         of.origin.y = oc.y - newSize.height / 2
         of.size = newSize
         originFrame = of
-        
+
         imageView.frame = borderView.bounds.insetBy(dx: Self.edgeInset, dy: Self.edgeInset)
-        
+
         // Readd zoom scale.
         transform = transform.scaledBy(x: originScale, y: originScale)
         // Readd ges scale.
-        transform = transform.scaledBy(x: gesScale, y: gesScale)
+        transform = transform.scaledBy(x: currentGestureScale, y: currentGestureScale)
         // Readd ges rotation.
-        transform = transform.rotated(by: gesRotation)
+        transform = transform.rotated(by: currentGestureRotation)
         transform = transform.rotated(by: originAngle.maha.toPi)
     }
-    
+
     class func calculateSize(image: UIImage) -> CGSize {
         var size = image.size
         size.width += Self.edgeInset * 2

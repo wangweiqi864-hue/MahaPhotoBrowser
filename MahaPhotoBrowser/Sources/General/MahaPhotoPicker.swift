@@ -28,38 +28,38 @@ import UIKit
 import Photos
 
 public class MahaPhotoPicker: NSObject {
-    private var arrSelectedModels: [MahaPhotoModel] = []
-    
-    private weak var sender: UIViewController?
-    
-    private weak var previewSheet: MahaPhotoPreviewSheet?
-    
-    private var isSelectOriginal = false
-    
-    private lazy var fetchImageQueue: OperationQueue = {
+    private var selectedModels: [MahaPhotoModel] = []
+
+    private weak var presentingViewController: UIViewController?
+
+    private weak var activePreviewSheet: MahaPhotoPreviewSheet?
+
+    private var isOriginalSelectionEnabled = false
+
+    private lazy var imageFetchQueue: OperationQueue = {
         let queue = OperationQueue()
         queue.maxConcurrentOperationCount = 3
         return queue
     }()
-    
+
     /// Success callback
     /// block params
     ///  - params1: result models
     ///  - params2: is full image
     @objc public var selectImageBlock: (([MahaResultModel], Bool) -> Void)?
-    
+
     /// Callback for photos that failed to parse
     /// block params
     ///  - params1: failed assets.
     ///  - params2: index for asset
     @objc public var selectImageRequestErrorBlock: (([PHAsset], [Int]) -> Void)?
-    
+
     @objc public var cancelBlock: (() -> Void)?
-    
+
     deinit {
         zlLoggerInDebug("MahaPhotoPicker deinit")
     }
-    
+
     @objc override public init() {
         let config = MahaPhotoConfiguration.default()
         if !config.allowSelectImage, !config.allowSelectVideo {
@@ -67,23 +67,23 @@ public class MahaPhotoPicker: NSObject {
             config.allowSelectImage = true
         }
     }
-    
+
     /// - Parameter selectedAssets: preselected assets
     @objc public convenience init(selectedAssets: [PHAsset]? = nil) {
         self.init()
-        
+
         let config = MahaPhotoConfiguration.default()
         selectedAssets?.maha.removeDuplicate().forEach { asset in
             if !config.allowMixSelect, asset.mediaType == .video {
                 return
             }
-            
-            let m = MahaPhotoModel(asset: asset)
-            m.isSelected = true
-            self.arrSelectedModels.append(m)
+
+            let model = MahaPhotoModel(asset: asset)
+            model.isSelected = true
+            self.selectedModels.append(model)
         }
     }
-    
+
     /// Using this init method, you can continue editing the selected photo.
     /// - Note:
     ///     If you want to continue the last edit, you need to satisfy the value of `saveNewImageAfterEdit` is `false` at the time of the last selection.
@@ -91,72 +91,63 @@ public class MahaPhotoPicker: NSObject {
     ///    - results : preselected results
     @objc public convenience init(results: [MahaResultModel]? = nil) {
         self.init()
-        
+
         let config = MahaPhotoConfiguration.default()
         results?.maha.removeDuplicate().forEach { result in
             if !config.allowMixSelect, result.asset.mediaType == .video {
                 return
             }
-            
-            let m = MahaPhotoModel(asset: result.asset)
+
+            let model = MahaPhotoModel(asset: result.asset)
             if result.isEdited {
-                m.editImage = result.image
-                m.editImageModel = result.editModel
+                model.editImage = result.image
+                model.editImageModel = result.editModel
             }
-            m.isSelected = true
-            self.arrSelectedModels.append(m)
+            model.isSelected = true
+            self.selectedModels.append(model)
         }
     }
-    
+
     /// - Warning: When calling this method in OC language, make sure that the `sender` is not zero
     @discardableResult
     @objc public func showPreview(animate: Bool = true, sender: UIViewController) -> MahaPhotoPreviewSheet {
-        self.sender = sender
-        
-        let ps = MahaPhotoPreviewSheet(models: arrSelectedModels)
-        ps.selectPhotosBlock = { models, isOriginal in
-            self.requestSelectPhoto(models: models, isSelectOriginal: isOriginal)
+        presentingViewController = sender
+
+        let previewSheet = MahaPhotoPreviewSheet(models: selectedModels)
+        previewSheet.selectPhotosBlock = { models, isOriginal in
+            self.requestSelectedPhotos(models: models, isOriginalSelected: isOriginal)
         }
-        
-        ps.showLibraryBlock = { models, isOriginal in
-            self.arrSelectedModels.removeAll()
-            self.arrSelectedModels.append(contentsOf: models)
-            self.isSelectOriginal = isOriginal
+
+        previewSheet.showLibraryBlock = { models, isOriginal in
+            self.replaceSelectedModels(with: models)
+            self.isOriginalSelectionEnabled = isOriginal
             self.showPhotoLibrary(sender: sender)
         }
-        
-        ps.cancelBlock = {
+
+        previewSheet.cancelBlock = {
             self.cancel()
         }
-        
-        ps.showPreview(sender: sender)
-        previewSheet = ps
-        
-        return ps
+
+        previewSheet.showPreview(sender: sender)
+        activePreviewSheet = previewSheet
+
+        return previewSheet
     }
-    
+
     /// - Warning: When calling this method in OC language, make sure that the `sender` is not zero
     @discardableResult
     @objc public func showPhotoLibrary(sender: UIViewController) -> MahaImageNavController {
-        self.sender = sender
-        
-        let nav: MahaImageNavController
-        if MahaPhotoUIConfiguration.default().style == .embedAlbumList {
-            let tvc = MahaThumbnailViewController(albumList: nil)
-            nav = getImageNav(rootViewController: tvc)
-        } else {
-            nav = getImageNav(rootViewController: MahaAlbumListController())
-            let tvc = MahaThumbnailViewController(albumList: nil)
-            nav.pushViewController(tvc, animated: true)
+        presentingViewController = sender
+
+        let navigationController = makePhotoLibraryNavigationController()
+
+        sender.present(navigationController, animated: true) {
+            self.activePreviewSheet?.hide()
         }
-        
-        sender.present(nav, animated: true) {
-            self.previewSheet?.hide()
-        }
-        
-        return nav
+
+        return navigationController
     }
-    
+
     /// 传入已选择的assets，并预览
     @objc public func previewAssets(
         sender: UIViewController,
@@ -166,79 +157,98 @@ public class MahaPhotoPicker: NSObject {
         showBottomViewAndSelectBtn: Bool = true
     ) {
         assert(!assets.isEmpty, "Assets cannot be empty")
-        
-        let models = assets.maha.removeDuplicate().map { asset -> MahaPhotoModel in
-            let m = MahaPhotoModel(asset: asset)
-            m.isSelected = true
-            return m
-        }
-        
+
+        let models = makeSelectedModels(from: assets)
+
         guard !models.isEmpty else {
             return
         }
-        
-        arrSelectedModels.removeAll()
-        arrSelectedModels.append(contentsOf: models)
-        self.sender = sender
-        
-        isSelectOriginal = isOriginal
-        
-        let vc = MahaPhotoPreviewController(photos: models, index: index, showBottomViewAndSelectBtn: showBottomViewAndSelectBtn)
-        vc.autoSelectCurrentIfNotSelectAnyone = false
-        let nav = getImageNav(rootViewController: vc)
-        vc.backBlock = {
+
+        replaceSelectedModels(with: models)
+        presentingViewController = sender
+
+        isOriginalSelectionEnabled = isOriginal
+
+        let previewController = MahaPhotoPreviewController(photos: models, index: index, showBottomViewAndSelectBtn: showBottomViewAndSelectBtn)
+        previewController.autoSelectCurrentIfNotSelectAnyone = false
+        let navigationController = makeImageNavigationController(rootViewController: previewController)
+        previewController.backBlock = {
             self.cancel()
         }
-        
-        sender.showDetailViewController(nav, sender: nil)
+
+        sender.showDetailViewController(navigationController, sender: nil)
     }
-    
-    private func getImageNav(rootViewController: UIViewController) -> MahaImageNavController {
-        let nav = MahaImageNavController(rootViewController: rootViewController)
-        nav.modalPresentationStyle = .fullScreen
-        nav.selectImageBlock = { [weak nav] in
-            self.requestSelectPhoto(
-                models: nav?.arrSelectedModels ?? [],
-                isSelectOriginal: nav?.isSelectedOriginal ?? false,
-                viewController: nav
+
+    private func makeSelectedModels(from assets: [PHAsset]) -> [MahaPhotoModel] {
+        assets.maha.removeDuplicate().map { asset in
+            let model = MahaPhotoModel(asset: asset)
+            model.isSelected = true
+            return model
+        }
+    }
+
+    private func replaceSelectedModels(with models: [MahaPhotoModel]) {
+        selectedModels = models
+    }
+
+    private func makePhotoLibraryNavigationController() -> MahaImageNavController {
+        let navigationController: MahaImageNavController
+        if MahaPhotoUIConfiguration.default().style == .embedAlbumList {
+            let thumbnailController = MahaThumbnailViewController(albumList: nil)
+            navigationController = makeImageNavigationController(rootViewController: thumbnailController)
+        } else {
+            navigationController = makeImageNavigationController(rootViewController: MahaAlbumListController())
+            let thumbnailController = MahaThumbnailViewController(albumList: nil)
+            navigationController.pushViewController(thumbnailController, animated: true)
+        }
+
+        return navigationController
+    }
+
+    private func makeImageNavigationController(rootViewController: UIViewController) -> MahaImageNavController {
+        let navigationController = MahaImageNavController(rootViewController: rootViewController)
+        navigationController.modalPresentationStyle = .fullScreen
+        navigationController.selectPhotosHandler = { [weak navigationController] in
+            self.requestSelectedPhotos(
+                models: navigationController?.selectedPhotoModels ?? [],
+                isOriginalSelected: navigationController?.isOriginalSelectionEnabled ?? false,
+                dismissing: navigationController
             )
         }
-        
-        nav.cancelBlock = {
+
+        navigationController.cancelHandler = {
             self.cancel()
         }
-        nav.isSelectedOriginal = isSelectOriginal
-        nav.arrSelectedModels.removeAll()
-        nav.arrSelectedModels.append(contentsOf: arrSelectedModels)
-        
-        return nav
+        navigationController.isOriginalSelectionEnabled = isOriginalSelectionEnabled
+        navigationController.selectedPhotoModels = selectedModels
+
+        return navigationController
     }
-    
+
     private func cancel() {
         cancelBlock?()
     }
-    
+
     /// 解析选择的图片
-    private func requestSelectPhoto(
+    private func requestSelectedPhotos(
         models: [MahaPhotoModel],
-        isSelectOriginal: Bool,
-        viewController: UIViewController? = nil
+        isOriginalSelected: Bool,
+        dismissing viewController: UIViewController? = nil
     ) {
-        arrSelectedModels.removeAll()
-        arrSelectedModels.append(contentsOf: models)
-        
-        guard !arrSelectedModels.isEmpty else {
-            selectImageBlock?([], isSelectOriginal)
-            previewSheet?.hide()
+        replaceSelectedModels(with: models)
+
+        guard !selectedModels.isEmpty else {
+            selectImageBlock?([], isOriginalSelected)
+            activePreviewSheet?.hide()
             viewController?.dismiss(animated: true, completion: nil)
             return
         }
-        
+
         let config = MahaPhotoConfiguration.default()
-        
+
         if config.allowMixSelect {
-            let videoCount = arrSelectedModels.filter { $0.type == .video }.count
-            
+            let videoCount = selectedModels.filter { $0.type == .video }.count
+
             if videoCount > config.maxVideoSelectCount {
                 showAlertView(String(format: localLanguageTextValue(.exceededMaxVideoSelectCount), MahaPhotoConfiguration.default().maxVideoSelectCount), viewController)
                 return
@@ -247,80 +257,80 @@ public class MahaPhotoPicker: NSObject {
                 return
             }
         }
-        
+
         let hud = MahaProgressHUD.show(toast: .processing, timeout: MahaPhotoUIConfiguration.default().timeout)
-        
-        var timeout = false
+
+        var didTimeout = false
         hud.timeoutBlock = { [weak self] in
-            timeout = true
-            showAlertView(localLanguageTextValue(.timeout), viewController ?? self?.sender)
-            self?.fetchImageQueue.cancelAllOperations()
+            didTimeout = true
+            showAlertView(localLanguageTextValue(.timeout), viewController ?? self?.presentingViewController)
+            self?.imageFetchQueue.cancelAllOperations()
         }
-        
-        let isOriginal = config.allowSelectOriginal ? isSelectOriginal : config.alwaysRequestOriginal
-        
-        let callback = { [weak self] (sucModels: [MahaResultModel], errorAssets: [PHAsset], errorIndexs: [Int]) in
+
+        let shouldRequestOriginal = config.allowSelectOriginal ? isOriginalSelected : config.alwaysRequestOriginal
+
+        let completion = { [weak self] (successModels: [MahaResultModel], failedAssets: [PHAsset], failedIndexes: [Int]) in
             hud.hide()
-            
-            func call() {
-                self?.selectImageBlock?(sucModels, isOriginal)
-                if !errorAssets.isEmpty {
-                    self?.selectImageRequestErrorBlock?(errorAssets, errorIndexs)
+
+            func notifySelectionResult() {
+                self?.selectImageBlock?(successModels, shouldRequestOriginal)
+                if !failedAssets.isEmpty {
+                    self?.selectImageRequestErrorBlock?(failedAssets, failedIndexes)
                 }
             }
-            
+
             if let vc = viewController {
                 vc.dismiss(animated: true) {
-                    call()
+                    notifySelectionResult()
                 }
             } else {
-                self?.previewSheet?.hide {
-                    call()
+                self?.activePreviewSheet?.hide {
+                    notifySelectionResult()
                 }
             }
-            
-            self?.arrSelectedModels.removeAll()
+
+            self?.selectedModels.removeAll()
         }
-        
-        var results: [MahaResultModel?] = Array(repeating: nil, count: arrSelectedModels.count)
-        var errorAssets: [PHAsset] = []
-        var errorIndexs: [Int] = []
-        
-        var sucCount = 0
-        let totalCount = arrSelectedModels.count
-        
-        for (i, m) in arrSelectedModels.enumerated() {
-            let operation = MahaFetchImageOperation(model: m, isOriginal: isOriginal) { image, asset in
-                guard !timeout else { return }
-                
-                sucCount += 1
-                
+
+        var resultsByIndex: [MahaResultModel?] = Array(repeating: nil, count: selectedModels.count)
+        var failedAssets: [PHAsset] = []
+        var failedIndexes: [Int] = []
+
+        var completedCount = 0
+        let totalCount = selectedModels.count
+
+        for (index, model) in selectedModels.enumerated() {
+            let operation = MahaFetchImageOperation(model: model, isOriginal: shouldRequestOriginal) { image, asset in
+                guard !didTimeout else { return }
+
+                completedCount += 1
+
                 if let image = image {
-                    let isEdited = m.editImage != nil && !config.saveNewImageAfterEdit
-                    let model = MahaResultModel(
-                        asset: asset ?? m.asset,
+                    let isEdited = model.editImage != nil && !config.saveNewImageAfterEdit
+                    let resultModel = MahaResultModel(
+                        asset: asset ?? model.asset,
                         image: image,
                         isEdited: isEdited,
-                        editModel: isEdited ? m.editImageModel : nil,
-                        index: i
+                        editModel: isEdited ? model.editImageModel : nil,
+                        index: index
                     )
-                    results[i] = model
-                    mahaDebugPrint("MahaPhotoBrowser: suc request \(i)")
+                    resultsByIndex[index] = resultModel
+                    mahaDebugPrint("MahaPhotoBrowser: suc request \(index)")
                 } else {
-                    errorAssets.append(m.asset)
-                    errorIndexs.append(i)
-                    mahaDebugPrint("MahaPhotoBrowser: failed request \(i)")
+                    failedAssets.append(model.asset)
+                    failedIndexes.append(index)
+                    mahaDebugPrint("MahaPhotoBrowser: failed request \(index)")
                 }
-                
-                guard sucCount >= totalCount else { return }
-                
-                callback(
-                    results.compactMap { $0 },
-                    errorAssets,
-                    errorIndexs
+
+                guard completedCount >= totalCount else { return }
+
+                completion(
+                    resultsByIndex.compactMap { $0 },
+                    failedAssets,
+                    failedIndexes
                 )
             }
-            fetchImageQueue.addOperation(operation)
+            imageFetchQueue.addOperation(operation)
         }
     }
 }
@@ -330,19 +340,9 @@ public class MahaPhotoPicker: NSObject {
 public extension MahaPhotoPicker {
     @available(iOS, introduced: 13.0, message: "Only available for SwiftUI")
     func showPhotoLibraryForSwiftUI() -> MahaImageNavController {
-        let nav: MahaImageNavController
-        if MahaPhotoUIConfiguration.default().style == .embedAlbumList {
-            let tvc = MahaThumbnailViewController(albumList: nil)
-            nav = getImageNav(rootViewController: tvc)
-        } else {
-            nav = getImageNav(rootViewController: MahaAlbumListController())
-            let tvc = MahaThumbnailViewController(albumList: nil)
-            nav.pushViewController(tvc, animated: true)
-        }
-        
-        return nav
+        makePhotoLibraryNavigationController()
     }
-    
+
     /// 传入已选择的assets，并预览
     @objc func previewAssetsForSwiftUI(
         assets: [PHAsset],
@@ -351,25 +351,20 @@ public extension MahaPhotoPicker {
         showBottomViewAndSelectBtn: Bool = true
     ) -> MahaImageNavController {
         assert(!assets.isEmpty, "Assets cannot be empty")
-        
-        let models = assets.maha.removeDuplicate().map { asset -> MahaPhotoModel in
-            let m = MahaPhotoModel(asset: asset)
-            m.isSelected = true
-            return m
-        }
-        
-        arrSelectedModels.removeAll()
-        arrSelectedModels.append(contentsOf: models)
-        
-        isSelectOriginal = isOriginal
-        
-        let vc = MahaPhotoPreviewController(photos: models, index: index, showBottomViewAndSelectBtn: showBottomViewAndSelectBtn)
-        vc.autoSelectCurrentIfNotSelectAnyone = false
-        let nav = getImageNav(rootViewController: vc)
-        vc.backBlock = {
+
+        let models = makeSelectedModels(from: assets)
+
+        replaceSelectedModels(with: models)
+
+        isOriginalSelectionEnabled = isOriginal
+
+        let previewController = MahaPhotoPreviewController(photos: models, index: index, showBottomViewAndSelectBtn: showBottomViewAndSelectBtn)
+        previewController.autoSelectCurrentIfNotSelectAnyone = false
+        let navigationController = makeImageNavigationController(rootViewController: previewController)
+        previewController.backBlock = {
             self.cancel()
         }
-        
-        return nav
+
+        return navigationController
     }
 }

@@ -43,46 +43,39 @@ enum MahaLayout {
     static let bottomToolBtnCornerRadius: CGFloat = 5
 }
 
-func markSelected(source: inout [MahaPhotoModel], selected: inout [MahaPhotoModel]) {
-    guard !selected.isEmpty else {
+func markSelected(source sourceModels: inout [MahaPhotoModel], selected selectedModels: inout [MahaPhotoModel]) {
+    guard !selectedModels.isEmpty else {
         return
     }
     
-    var selIds: [String: Bool] = [:]
-    var selEditImage: [String: UIImage] = [:]
-    var selEditModel: [String: MahaEditImageModel] = [:]
-    var selIdAndIndex: [String: Int] = [:]
+    var selectedIdentifiers: [String: Bool] = [:]
+    var selectedEditedImages: [String: UIImage] = [:]
+    var selectedEditModels: [String: MahaEditImageModel] = [:]
+    var selectedIndexesByIdentifier: [String: Int] = [:]
     
-    for (index, m) in selected.enumerated() {
-        selIds[m.ident] = true
-        selEditImage[m.ident] = m.editImage
-        selEditModel[m.ident] = m.editImageModel
-        selIdAndIndex[m.ident] = index
+    for (index, selectedModel) in selectedModels.enumerated() {
+        selectedIdentifiers[selectedModel.ident] = true
+        selectedEditedImages[selectedModel.ident] = selectedModel.editImage
+        selectedEditModels[selectedModel.ident] = selectedModel.editImageModel
+        selectedIndexesByIdentifier[selectedModel.ident] = index
     }
     
-    source.forEach { m in
-        if selIds[m.ident] == true {
-            m.isSelected = true
-            m.editImage = selEditImage[m.ident]
-            m.editImageModel = selEditModel[m.ident]
-            selected[selIdAndIndex[m.ident]!] = m
+    sourceModels.forEach { sourceModel in
+        if selectedIdentifiers[sourceModel.ident] == true {
+            sourceModel.isSelected = true
+            sourceModel.editImage = selectedEditedImages[sourceModel.ident]
+            sourceModel.editImageModel = selectedEditModels[sourceModel.ident]
+            if let selectedIndex = selectedIndexesByIdentifier[sourceModel.ident] {
+                selectedModels[selectedIndex] = sourceModel
+            }
         } else {
-            m.isSelected = false
+            sourceModel.isSelected = false
         }
     }
 }
 
 func getAppName() -> String {
-    if let name = Bundle.main.localizedInfoDictionary?["CFBundleDisplayName"] as? String {
-        return name
-    }
-    if let name = Bundle.main.infoDictionary?["CFBundleDisplayName"] as? String {
-        return name
-    }
-    if let name = Bundle.main.infoDictionary?["CFBundleName"] as? String {
-        return name
-    }
-    return "App"
+    bundleDisplayName() ?? bundleName() ?? "App"
 }
 
 func deviceIsiPhone() -> Bool {
@@ -94,21 +87,18 @@ func deviceIsiPad() -> Bool {
 }
 
 func deviceSafeAreaInsets() -> UIEdgeInsets {
-    var insets: UIEdgeInsets = .zero
-    
     if #available(iOS 11, *) {
-        insets = UIApplication.shared.keyWindow?.safeAreaInsets ?? .zero
+        return UIApplication.shared.keyWindow?.safeAreaInsets ?? .zero
     }
-    
-    return insets
+    return .zero
 }
 
 func deviceIsFringeScreen() -> Bool {
+    let safeAreaInsets = deviceSafeAreaInsets()
     if UIApplication.shared.statusBarOrientation.isLandscape {
-        return deviceSafeAreaInsets().left > 0 || deviceSafeAreaInsets().right > 0
-    } else {
-        return deviceSafeAreaInsets().top > 20
+        return safeAreaInsets.left > 0 || safeAreaInsets.right > 0
     }
+    return safeAreaInsets.top > 20
 }
 
 func isSmallScreen() -> Bool {
@@ -134,9 +124,9 @@ func showAlertController(title: String?, message: String?, style: MahaCustomAler
         return
     }
     
-    let alert = UIAlertController(title: title, message: message, preferredStyle: style.toSystemAlertStyle)
+    let alert = UIAlertController(title: title, message: message, preferredStyle: style.systemAlertStyle)
     actions
-        .map { $0.toSystemAlertAction() }
+        .map { $0.makeSystemAlertAction() }
         .forEach { alert.addAction($0) }
     
     let presentedVC = sender ?? UIApplication.shared.keyWindow?.rootViewController
@@ -224,16 +214,16 @@ func downloadAssetIfNeed(model: MahaPhotoModel, sender: UIViewController?, compl
         return
     }
 
-    var requestAssetID: PHImageRequestID?
+    var imageRequestID: PHImageRequestID?
     let hud = MahaProgressHUD.show(timeout: MahaPhotoUIConfiguration.default().timeout)
     hud.timeoutBlock = { [weak sender] in
         showAlertView(localLanguageTextValue(.timeout), sender)
-        if let requestAssetID = requestAssetID {
-            PHImageManager.default().cancelImageRequest(requestAssetID)
+        if let imageRequestID {
+            PHImageManager.default().cancelImageRequest(imageRequestID)
         }
     }
 
-    requestAssetID = MahaPhotoManager.fetchVideo(for: model.asset, completion: { _, _, isDegraded in
+    imageRequestID = MahaPhotoManager.fetchVideo(for: model.asset, completion: { _, _, isDegraded in
         hud.hide()
         
         if !isDegraded {
@@ -287,4 +277,15 @@ func zlLoggerInDebug(_ lastMessage: @autoclosure () -> String, file: StaticStrin
     #if DEBUG
         print("file: \(file), line: \(line), func: \(funcName), message: \(lastMessage())")
     #endif
+}
+
+private func bundleDisplayName() -> String? {
+    if let localizedDisplayName = Bundle.main.localizedInfoDictionary?["CFBundleDisplayName"] as? String {
+        return localizedDisplayName
+    }
+    return Bundle.main.infoDictionary?["CFBundleDisplayName"] as? String
+}
+
+private func bundleName() -> String? {
+    Bundle.main.infoDictionary?["CFBundleName"] as? String
 }

@@ -33,17 +33,17 @@ public class MahaDrawPath: NSObject {
     
     private let pathColor: UIColor
     
-    private var bgPath: UIBezierPath
+    private var backgroundPath: UIBezierPath
     
-    private let ratio: CGFloat
+    private let pointScale: CGFloat
     
-    private var points: [CGPoint] = []
+    private var rawPoints: [CGPoint] = []
     
     let index: Int
     
     var path: UIBezierPath
     
-    var willDelete = false
+    var isPendingDeletion = false
     
     init(pathColor: UIColor, pathWidth: CGFloat, defaultLinePath: CGFloat, ratio: CGFloat, startPoint: CGPoint) {
         self.pathColor = pathColor
@@ -53,14 +53,14 @@ public class MahaDrawPath: NSObject {
         path.lineJoinStyle = .round
         path.move(to: CGPoint(x: startPoint.x / ratio, y: startPoint.y / ratio))
         
-        bgPath = UIBezierPath()
-        bgPath.lineWidth = pathWidth / ratio + defaultLinePath
-        bgPath.lineCapStyle = .round
-        bgPath.lineJoinStyle = .round
-        bgPath.move(to: CGPoint(x: startPoint.x / ratio, y: startPoint.y / ratio))
+        backgroundPath = UIBezierPath()
+        backgroundPath.lineWidth = pathWidth / ratio + defaultLinePath
+        backgroundPath.lineCapStyle = .round
+        backgroundPath.lineJoinStyle = .round
+        backgroundPath.move(to: CGPoint(x: startPoint.x / ratio, y: startPoint.y / ratio))
         
-        points.append(startPoint)
-        self.ratio = ratio
+        rawPoints.append(startPoint)
+        pointScale = ratio
         index = Self.pathIndex
         Self.pathIndex += 1
         
@@ -68,67 +68,69 @@ public class MahaDrawPath: NSObject {
     }
     
     func addLine(to point: CGPoint) {
-        points.append(point)
+        rawPoints.append(point)
         
-        func divRatio(_ point: CGPoint) -> CGPoint {
-            return CGPoint(x: point.x / ratio, y: point.y / ratio)
+        func scaledPoint(for point: CGPoint) -> CGPoint {
+            return CGPoint(x: point.x / pointScale, y: point.y / pointScale)
         }
         
-        guard points.count >= 4 else {
-            path.addLine(to: divRatio(point))
-            bgPath.addLine(to: divRatio(point))
+        guard rawPoints.count >= 4 else {
+            path.addLine(to: scaledPoint(for: point))
+            backgroundPath.addLine(to: scaledPoint(for: point))
             return
         }
         
         path.removeAllPoints()
-        bgPath.removeAllPoints()
+        backgroundPath.removeAllPoints()
         
         // https://blog.csdn.net/ChasingDreamsCoder/article/details/53015694
-        path.move(to: divRatio(points[0]))
-        path.addLine(to: divRatio(points[1]))
+        path.move(to: scaledPoint(for: rawPoints[0]))
+        path.addLine(to: scaledPoint(for: rawPoints[1]))
         
-        bgPath.move(to: divRatio(points[0]))
-        bgPath.addLine(to: divRatio(points[1]))
+        backgroundPath.move(to: scaledPoint(for: rawPoints[0]))
+        backgroundPath.addLine(to: scaledPoint(for: rawPoints[1]))
         
         let granularity = 4
-        for i in 3..<points.count {
-            let p0 = points[i - 3]
-            let p1 = points[i - 2]
-            let p2 = points[i - 1]
-            let p3 = points[i]
+        for index in 3..<rawPoints.count {
+            let p0 = rawPoints[index - 3]
+            let p1 = rawPoints[index - 2]
+            let p2 = rawPoints[index - 1]
+            let p3 = rawPoints[index]
             
-            for i in 1..<granularity {
-                let t = CGFloat(i) * (1 / CGFloat(granularity))
+            for step in 1..<granularity {
+                let t = CGFloat(step) * (1 / CGFloat(granularity))
                 let tt = t * t
                 let ttt = tt * t
 
-                var point = CGPoint.zero
-                point.x = 0.5 * (
+                var interpolatedPoint = CGPoint.zero
+                interpolatedPoint.x = 0.5 * (
                     2 * p1.x + (p2.x - p0.x) * t +
                     (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * tt +
                     (3 * p1.x - p0.x - 3 * p2.x + p3.x) * ttt
                 )
-                point.y = 0.5 * (
+                interpolatedPoint.y = 0.5 * (
                     2 * p1.y + (p2.y - p0.y) * t +
                     (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * tt +
                     (3 * p1.y - p0.y - 3 * p2.y + p3.y) * ttt
                 )
-                path.addLine(to: divRatio(point))
-                bgPath.addLine(to: divRatio(point))
+                path.addLine(to: scaledPoint(for: interpolatedPoint))
+                backgroundPath.addLine(to: scaledPoint(for: interpolatedPoint))
             }
             
-            path.addLine(to: divRatio(p2))
-            bgPath.addLine(to: divRatio(p2))
+            path.addLine(to: scaledPoint(for: p2))
+            backgroundPath.addLine(to: scaledPoint(for: p2))
         }
         
-        path.addLine(to: divRatio(points[points.count - 1]))
-        bgPath.addLine(to: divRatio(points[points.count - 1]))
+        if let lastPoint = rawPoints.last {
+            path.addLine(to: scaledPoint(for: lastPoint))
+            backgroundPath.addLine(to: scaledPoint(for: lastPoint))
+        }
     }
     
     func drawPath() {
-        if willDelete {
+        if isPendingDeletion {
             UIColor.white.set()
-            bgPath.stroke()
+            backgroundPath.stroke()
             pathColor.withAlphaComponent(0.7).set()
         } else {
             pathColor.set()
@@ -149,9 +151,9 @@ public extension MahaDrawPath {
 public class MahaMosaicPath: NSObject {
     let path: UIBezierPath
     
-    let ratio: CGFloat
+    let pointScale: CGFloat
     
-    let startPoint: CGPoint
+    let scaledStartPoint: CGPoint
     
     var linePoints: [CGPoint] = []
     
@@ -162,14 +164,14 @@ public class MahaMosaicPath: NSObject {
         path.lineJoinStyle = .round
         path.move(to: startPoint)
         
-        self.ratio = ratio
-        self.startPoint = CGPoint(x: startPoint.x / ratio, y: startPoint.y / ratio)
+        pointScale = ratio
+        scaledStartPoint = CGPoint(x: startPoint.x / ratio, y: startPoint.y / ratio)
         
         super.init()
     }
     
     func addLine(to point: CGPoint) {
         path.addLine(to: point)
-        linePoints.append(CGPoint(x: point.x / ratio, y: point.y / ratio))
+        linePoints.append(CGPoint(x: point.x / pointScale, y: point.y / pointScale))
     }
 }

@@ -30,7 +30,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface MahaWeakProxy : NSObject
 
-@property (nonatomic, weak, readonly, nullable) id target;
+@property (nonatomic, weak, readonly, nullable) id proxiedTarget;
 
 - (nonnull instancetype)initWithTarget:(nonnull id)target NS_SWIFT_NAME(init(target:));
 + (nonnull instancetype)proxyWithTarget:(nonnull id)target NS_SWIFT_NAME(proxy(target:));

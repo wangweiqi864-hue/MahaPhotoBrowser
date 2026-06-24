@@ -28,13 +28,13 @@ import UIKit
 import Photos
 
 public class MahaImageNavController: UINavigationController {
-    var isSelectedOriginal = false
+    var isOriginalSelectionEnabled = false
     
-    var arrSelectedModels: [MahaPhotoModel] = []
+    var selectedPhotoModels: [MahaPhotoModel] = []
     
-    var selectImageBlock: (() -> Void)?
+    var selectPhotosHandler: (() -> Void)?
     
-    var cancelBlock: (() -> Void)?
+    var cancelHandler: (() -> Void)?
     
     deinit {
         mahaDebugPrint("MahaImageNavController deinit")
@@ -45,7 +45,7 @@ public class MahaImageNavController: UINavigationController {
     }
     
     override init(nibName nibNameOrNil: String?, bundle nibBundleOrNil: Bundle?) {
-        super.init(nibName: nil, bundle: nil)
+        super.init(nibName: nibNameOrNil, bundle: nibBundleOrNil)
     }
     
     override init(rootViewController: UIViewController) {
@@ -63,7 +63,5 @@ public class MahaImageNavController: UINavigationController {
     
     public override func viewDidLoad() {
         super.viewDidLoad()
-
-        // Do any additional setup after loading the view.
     }
 }

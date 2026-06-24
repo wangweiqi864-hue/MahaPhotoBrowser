@@ -56,60 +56,61 @@ class MahaPreviewBaseCell: UICollectionViewCell {
         let size = CGSize(width: asset.pixelWidth, height: asset.pixelHeight)
         var frame: CGRect = .zero
         
-        let viewW = bounds.width
-        let viewH = bounds.height
+        let viewportWidth = bounds.width
+        let viewportHeight = bounds.height
+        let isLandscape = UIApplication.shared.statusBarOrientation.isLandscape
         
-        var width = viewW
+        var fittedWidth = viewportWidth
         
         // video和livephoto没必要处理长图和宽图
-        if UIApplication.shared.statusBarOrientation.isLandscape {
-            let height = viewH
-            frame.size.height = height
+        if isLandscape {
+            let fittedHeight = viewportHeight
+            frame.size.height = fittedHeight
             
             let imageWHRatio = size.width / size.height
-            let viewWHRatio = viewW / viewH
+            let viewportAspectRatio = viewportWidth / viewportHeight
             
-            if imageWHRatio > viewWHRatio {
-                frame.size.width = floor(height * imageWHRatio)
-                if frame.size.width > viewW {
-                    frame.size.width = viewW
-                    frame.size.height = viewW / imageWHRatio
+            if imageWHRatio > viewportAspectRatio {
+                frame.size.width = floor(fittedHeight * imageWHRatio)
+                if frame.size.width > viewportWidth {
+                    frame.size.width = viewportWidth
+                    frame.size.height = viewportWidth / imageWHRatio
                 }
             } else {
-                width = floor(height * imageWHRatio)
-                if width < 1 || width.isNaN {
-                    width = viewW
+                fittedWidth = floor(fittedHeight * imageWHRatio)
+                if fittedWidth < 1 || fittedWidth.isNaN {
+                    fittedWidth = viewportWidth
                 }
-                frame.size.width = width
+                frame.size.width = fittedWidth
             }
         } else {
-            frame.size.width = width
+            frame.size.width = fittedWidth
             
             let imageHWRatio = size.height / size.width
-            let viewHWRatio = viewH / viewW
+            let viewportHeightWidthRatio = viewportHeight / viewportWidth
             
-            if imageHWRatio > viewHWRatio {
-                frame.size.height = floor(width * imageHWRatio)
+            if imageHWRatio > viewportHeightWidthRatio {
+                frame.size.height = floor(fittedWidth * imageHWRatio)
             } else {
-                var height = floor(width * imageHWRatio)
-                if height < 1 || height.isNaN {
-                    height = viewH
+                var fittedHeight = floor(fittedWidth * imageHWRatio)
+                if fittedHeight < 1 || fittedHeight.isNaN {
+                    fittedHeight = viewportHeight
                 }
-                frame.size.height = height
+                frame.size.height = fittedHeight
             }
         }
         
         imageView.frame = frame
         
-        if UIApplication.shared.statusBarOrientation.isLandscape {
-            if frame.height < viewH {
-                imageView.center = CGPoint(x: viewW / 2, y: viewH / 2)
+        if isLandscape {
+            if frame.height < viewportHeight {
+                imageView.center = CGPoint(x: viewportWidth / 2, y: viewportHeight / 2)
             } else {
-                imageView.frame = CGRect(origin: CGPoint(x: (viewW - frame.width) / 2, y: 0), size: frame.size)
+                imageView.frame = CGRect(origin: CGPoint(x: (viewportWidth - frame.width) / 2, y: 0), size: frame.size)
             }
         } else {
-            if frame.width < viewW || frame.height < viewH {
-                imageView.center = CGPoint(x: viewW / 2, y: viewH / 2)
+            if frame.width < viewportWidth || frame.height < viewportHeight {
+                imageView.center = CGPoint(x: viewportWidth / 2, y: viewportHeight / 2)
             }
         }
     }

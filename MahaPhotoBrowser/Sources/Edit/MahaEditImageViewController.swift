@@ -30,7 +30,7 @@ public struct MahaClipStatus {
     var editRect: CGRect
     var angle: CGFloat = 0
     var ratio: MahaImageClipRatio?
-    
+
     public init(editRect: CGRect, angle: CGFloat = 0, ratio: MahaImageClipRatio? = nil) {
         self.editRect = editRect
         self.angle = angle
@@ -42,11 +42,11 @@ public struct MahaAdjustStatus {
     var brightness: Float = 0
     var contrast: Float = 0
     var saturation: Float = 0
-    
+
     var allValueIsZero: Bool {
         brightness == 0 && contrast == 0 && saturation == 0
     }
-    
+
     public init(brightness: Float = 0, contrast: Float = 0, saturation: Float = 0) {
         self.brightness = brightness
         self.contrast = contrast
@@ -56,19 +56,19 @@ public struct MahaAdjustStatus {
 
 public class MahaEditImageModel: NSObject {
     public let drawPaths: [MahaDrawPath]
-    
+
     public let mosaicPaths: [MahaMosaicPath]
-    
+
     public let clipStatus: MahaClipStatus?
-    
+
     public let adjustStatus: MahaAdjustStatus?
-    
+
     public let selectFilter: MahaFilter?
-    
+
     public let stickers: [MahaBaseStickertState]
-    
+
     public let actions: [MahaEditorAction]
-    
+
     public init(
         drawPaths: [MahaDrawPath] = [],
         mosaicPaths: [MahaMosaicPath] = [],
@@ -91,33 +91,33 @@ public class MahaEditImageModel: NSObject {
 
 open class MahaEditImageViewController: UIViewController {
     static let maxDrawLineImageWidth: CGFloat = 600
-    
+
     static let shadowColorFrom = UIColor.black.withAlphaComponent(0.35).cgColor
-    
+
     static let shadowColorTo = UIColor.clear.cgColor
-    
+
     static let ashbinSize = CGSize(width: 160, height: 80)
-    
+
     private let tools: [MahaEditImageConfiguration.EditTool]
-    
+
     private let adjustTools: [MahaEditImageConfiguration.AdjustTool]
-    
+
     private var animate = false
-    
+
     private var originalImage: UIImage
-    
+
     private var editImage: UIImage
-    
+
     private var editImageWithoutAdjust: UIImage
-    
+
     private var editImageAdjustRef: UIImage?
-    
+
     private lazy var containerView: UIView = {
         let view = UIView()
         view.clipsToBounds = true
         return view
     }()
-    
+
     // Show image.
     private lazy var imageView: UIImageView = {
         let view = UIImageView(image: originalImage)
@@ -126,7 +126,7 @@ open class MahaEditImageViewController: UIViewController {
         view.backgroundColor = .black
         return view
     }()
-    
+
     // Show draw lines.
     private lazy var drawingImageView: UIImageView = {
         let view = UIImageView()
@@ -134,113 +134,113 @@ open class MahaEditImageViewController: UIViewController {
         view.isUserInteractionEnabled = true
         return view
     }()
-    
+
     // Show text and image stickers.
     private lazy var stickersContainer = UIView()
-    
+
     // 处理好的马赛克图片
     private var mosaicImage: UIImage?
-    
+
     // 显示马赛克图片的layer
     private var mosaicImageLayer: CALayer?
-    
+
     // 显示马赛克图片的layer的mask
     private var mosaicImageLayerMaskLayer: CAShapeLayer?
-    
-    private var selectedTool: MahaEditImageConfiguration.EditTool?
-    
-    private var selectedAdjustTool: MahaEditImageConfiguration.AdjustTool?
-    
+
+    private var activeTool: MahaEditImageConfiguration.EditTool?
+
+    private var activeAdjustTool: MahaEditImageConfiguration.AdjustTool?
+
     private lazy var editToolCollectionView: UICollectionView = {
         let layout = MahaCollectionViewFlowLayout()
         layout.itemSize = CGSize(width: 30, height: 30)
         layout.minimumLineSpacing = 20
         layout.minimumInteritemSpacing = 20
         layout.scrollDirection = .horizontal
-        
+
         let view = UICollectionView(frame: .zero, collectionViewLayout: layout)
         view.backgroundColor = .clear
         view.delegate = self
         view.dataSource = self
         view.showsHorizontalScrollIndicator = false
         MahaEditToolCell.maha.register(view)
-        
+
         return view
     }()
-    
+
     private var drawColorCollectionView: UICollectionView?
-    
+
     private var filterCollectionView: UICollectionView?
-    
+
     private var adjustCollectionView: UICollectionView?
-    
+
     private var adjustSlider: MahaAdjustSlider?
-    
+
     private let drawColors: [UIColor]
-    
+
     private var currentDrawColor = MahaPhotoConfiguration.default().editImageConfiguration.defaultDrawColor
-    
+
     private var drawPaths: [MahaDrawPath]
-    
+
     private var mosaicPaths: [MahaMosaicPath]
-    
+
     private let minimumZoomScale = MahaPhotoConfiguration.default().editImageConfiguration.minimumZoomScale
-    
+
     private var hasAdjustedImage = false
-    
+
     // collectionview 中的添加滤镜的小图
-    private var thumbnailFilterImages: [UIImage] = []
-    
+    private var filterPreviewImages: [UIImage] = []
+
     // 选择滤镜后对原图添加滤镜后的图片
-    private var filterImages: [String: UIImage] = [:]
-    
+    private var cachedFilterImages: [String: UIImage] = [:]
+
     private var currentFilter: MahaFilter
-    
+
     private var stickers: [MahaBaseStickerView] = []
-    
+
     private var isScrolling = false
-    
+
     private var shouldLayout = true
-    
+
     private var isFirstSetContainerFrame = true
-    
-    private var imageStickerContainerIsHidden = true
-        
+
+    private var isImageStickerContainerHidden = true
+
     private var currentClipStatus: MahaClipStatus
-    
+
     private var preClipStatus: MahaClipStatus
-    
+
     private var preStickerState: MahaBaseStickertState?
-    
+
     private var currentAdjustStatus: MahaAdjustStatus
-    
+
     private var preAdjustStatus: MahaAdjustStatus
-    
+
     private var editorManager: MahaEditorManager
-    
+
     private lazy var panGes: UIPanGestureRecognizer = {
         let pan = UIPanGestureRecognizer(target: self, action: #selector(drawAction(_:)))
         pan.maximumNumberOfTouches = 1
         pan.delegate = self
         return pan
     }()
-    
-    private var toolViewStateTimer: Timer?
-    
+
+    private var toolViewVisibilityTimer: Timer?
+
     /// 是否允许交换图片宽高
     private var shouldSwapSize: Bool {
         currentClipStatus.angle.maha.toPi.truncatingRemainder(dividingBy: .pi) != 0
     }
-    
-    private lazy var deleteDrawPaths: [MahaDrawPath] = []
-    
+
+    private lazy var pendingDeletedDrawPaths: [MahaDrawPath] = []
+
     private var defaultDrawPathWidth: CGFloat = 0
-    
+
     private var impactFeedback: UIImpactFeedbackGenerator?
-    
+
     // 第一次进入界面时，布局后frame，裁剪dimiss动画使用
     var originalFrame: CGRect = .zero
-    
+
     var imageSize: CGSize {
         if shouldSwapSize {
             return CGSize(width: originalImage.size.height, height: originalImage.size.width)
@@ -248,13 +248,13 @@ open class MahaEditImageViewController: UIViewController {
             return originalImage.size
         }
     }
-    
+
     @objc public var drawColViewH: CGFloat = 50
-    
+
     @objc public var filterColViewH: CGFloat = 90
-    
+
     @objc public var adjustColViewH: CGFloat = 60
-    
+
     @objc public lazy var cancelBtn: MahaEnlargeButton = {
         let btn = MahaEnlargeButton(type: .custom)
         btn.titleLabel?.font = MahaLayout.navTitleFont
@@ -265,7 +265,7 @@ open class MahaEditImageViewController: UIViewController {
         btn.enlargeInset = 30
         return btn
     }()
-    
+
     @objc public lazy var mainScrollView: UIScrollView = {
         let view = UIScrollView()
         view.backgroundColor = .black
@@ -274,7 +274,7 @@ open class MahaEditImageViewController: UIViewController {
         view.delegate = self
         return view
     }()
-    
+
     // 上方渐变阴影层
     @objc public lazy var topShadowView: MahaPassThroughView = {
         let shadowView = MahaPassThroughView()
@@ -283,14 +283,14 @@ open class MahaEditImageViewController: UIViewController {
         }
         return shadowView
     }()
-    
+
     @objc public lazy var topShadowLayer: CAGradientLayer = {
         let layer = CAGradientLayer()
         layer.colors = [MahaEditImageViewController.shadowColorFrom, MahaEditImageViewController.shadowColorTo]
         layer.locations = [0, 1]
         return layer
     }()
-     
+
     // 下方渐变阴影层
     @objc public lazy var bottomShadowView: MahaPassThroughView = {
         let shadowView = MahaPassThroughView()
@@ -299,14 +299,14 @@ open class MahaEditImageViewController: UIViewController {
         }
         return shadowView
     }()
-    
+
     @objc public lazy var bottomShadowLayer: CAGradientLayer = {
         let layer = CAGradientLayer()
         layer.colors = [MahaEditImageViewController.shadowColorTo, MahaEditImageViewController.shadowColorFrom]
         layer.locations = [0, 1]
         return layer
     }()
-    
+
     @objc public lazy var doneBtn: UIButton = {
         let btn = UIButton(type: .custom)
         btn.titleLabel?.font = MahaLayout.bottomToolTitleFont
@@ -318,7 +318,7 @@ open class MahaEditImageViewController: UIViewController {
         btn.layer.cornerRadius = MahaLayout.bottomToolBtnCornerRadius
         return btn
     }()
-    
+
     @objc public lazy var undoBtn: MahaEnlargeButton = {
         let btn = MahaEnlargeButton(type: .custom)
         if isRTL() {
@@ -334,14 +334,14 @@ open class MahaEditImageViewController: UIViewController {
             btn.setImage(.maha.getImage("zl_undo"), for: .normal)
             btn.setImage(.maha.getImage("zl_undo_disable"), for: .disabled)
         }
-        
+
         btn.adjustsImageWhenHighlighted = false
         btn.isEnabled = !editorManager.actions.isEmpty
         btn.enlargeInset = 8
         btn.addTarget(self, action: #selector(undoBtnClick), for: .touchUpInside)
         return btn
     }()
-    
+
     @objc public lazy var redoBtn: MahaEnlargeButton = {
         let btn = MahaEnlargeButton(type: .custom)
         if isRTL() {
@@ -357,14 +357,14 @@ open class MahaEditImageViewController: UIViewController {
             btn.setImage(.maha.getImage("zl_redo"), for: .normal)
             btn.setImage(.maha.getImage("zl_redo_disable"), for: .disabled)
         }
-        
+
         btn.adjustsImageWhenHighlighted = false
         btn.isEnabled = editorManager.actions.count != editorManager.redoActions.count
         btn.enlargeInset = 8
         btn.addTarget(self, action: #selector(redoBtnClick), for: .touchUpInside)
         return btn
     }()
-    
+
     @objc public lazy var eraserBtn: MahaEnlargeButton = {
         let btn = MahaEnlargeButton(type: .custom)
         btn.setImage(.maha.getImage("zl_eraser"), for: .normal)
@@ -373,28 +373,28 @@ open class MahaEditImageViewController: UIViewController {
         btn.maha.setCornerRadius(18)
         return btn
     }()
-    
+
     @objc public lazy var eraserBtnBgBlurView: UIVisualEffectView = {
         let view = UIVisualEffectView(effect: UIBlurEffect(style: .light))
         view.isHidden = true
         view.maha.setCornerRadius(18)
         return view
     }()
-    
+
     @objc public lazy var eraserLineView: UIView = {
         let view = UIView()
         view.backgroundColor = .maha.rgba(89, 95, 107, 0.8)
         view.isHidden = true
         return view
     }()
-    
+
     @objc public lazy var eraserCircleView: UIImageView = {
         let imageView = UIImageView(image: .maha.getImage("zl_eraser_circle"))
         imageView.frame = CGRect(x: 0, y: 0, width: 44, height: 44)
         imageView.isHidden = true
         return imageView
     }()
-    
+
     @objc public lazy var ashbinView: UIView = {
         let view = UIView()
         view.backgroundColor = .maha.trashCanBackgroundNormalColor
@@ -403,33 +403,33 @@ open class MahaEditImageViewController: UIViewController {
         view.isHidden = true
         return view
     }()
-    
+
     @objc public lazy var ashbinImgView = UIImageView(image: .maha.getImage("zl_ashbin"), highlightedImage: .maha.getImage("zl_ashbin_open"))
-    
+
     @objc public var drawLineWidth: CGFloat = 6
-    
+
     @objc public var mosaicLineWidth: CGFloat = 25
-    
+
     @objc public var editFinishBlock: ((UIImage, MahaEditImageModel?) -> Void)?
-    
+
     @objc public var cancelEditBlock: (() -> Void)?
-    
+
     override public var prefersStatusBarHidden: Bool { true }
-    
+
     override public var prefersHomeIndicatorAutoHidden: Bool { true }
-    
+
     /// 延缓屏幕上下方通知栏弹出，避免手势冲突
     override public var preferredScreenEdgesDeferringSystemGestures: UIRectEdge { [.top, .bottom] }
-    
+
     override public var supportedInterfaceOrientations: UIInterfaceOrientationMask {
         deviceIsiPhone() ? .portrait : .all
     }
-    
+
     deinit {
-        cleanToolViewStateTimer()
+        invalidateToolViewVisibilityTimer()
         mahaDebugPrint("MahaEditImageViewController deinit")
     }
-    
+
     @objc public class func showEditImageVC(
         parentVC: UIViewController?,
         animate: Bool = false,
@@ -440,7 +440,7 @@ open class MahaEditImageViewController: UIViewController {
     ) {
         let tools = MahaPhotoConfiguration.default().editImageConfiguration.tools
         let editConfig = MahaPhotoConfiguration.default().editImageConfiguration
-        
+
         if editConfig.showClipDirectlyIfOnlyHasClipTool,
            tools.count == 1,
            tools.contains(.clip) {
@@ -469,7 +469,7 @@ open class MahaEditImageViewController: UIViewController {
             parentVC?.present(vc, animated: animate, completion: nil)
         }
     }
-    
+
     @objc public init(image: UIImage, editModel: MahaEditImageModel? = nil) {
         var image = image
         if image.scale != 1,
@@ -479,9 +479,9 @@ open class MahaEditImageViewController: UIViewController {
                 scale: 1
             ) ?? image
         }
-        
+
         let editConfig = MahaPhotoConfiguration.default().editImageConfiguration
-        
+
         originalImage = image.maha.fixOrientation()
         editImage = originalImage
         editImageWithoutAdjust = originalImage
@@ -493,64 +493,64 @@ open class MahaEditImageViewController: UIViewController {
         mosaicPaths = editModel?.mosaicPaths ?? []
         currentAdjustStatus = editModel?.adjustStatus ?? MahaAdjustStatus()
         preAdjustStatus = currentAdjustStatus
-        
+
         var ts = editConfig.tools
         if ts.contains(.imageSticker), editConfig.imageStickerContainerView == nil {
             ts.removeAll { $0 == .imageSticker }
         }
         tools = ts
         adjustTools = editConfig.adjustTools
-        selectedAdjustTool = editConfig.adjustTools.first
+        activeAdjustTool = editConfig.adjustTools.first
         editorManager = MahaEditorManager(actions: editModel?.actions ?? [])
-        
+
         super.init(nibName: nil, bundle: nil)
-        
+
         editorManager.delegate = self
-        
+
         if !drawColors.contains(currentDrawColor) {
             currentDrawColor = drawColors.first!
         }
-        
+
         stickers = editModel?.stickers.compactMap {
             MahaBaseStickerView.initWithState($0)
         } ?? []
     }
-    
+
     @available(*, unavailable)
     public required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-    
+
     override open func viewDidLoad() {
         super.viewDidLoad()
-        
+
         setupUI()
-        
+
         rotationImageView()
         if tools.contains(.filter) {
             generateFilterImages()
         }
     }
-    
+
     override open func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        
+
         guard tools.contains(.draw) else { return }
-        
+
         var size = drawingImageView.frame.size
         if shouldSwapSize {
             swap(&size.width, &size.height)
         }
-        
+
         var toImageScale = MahaEditImageViewController.maxDrawLineImageWidth / size.width
         if editImage.size.width / editImage.size.height > 1 {
             toImageScale = MahaEditImageViewController.maxDrawLineImageWidth / size.height
         }
-        
+
         let width = drawLineWidth / mainScrollView.zoomScale * toImageScale
         defaultDrawPathWidth = width
     }
-    
+
     override open func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         guard shouldLayout else {
@@ -563,10 +563,10 @@ open class MahaEditImageViewController: UIViewController {
             insets = view.safeAreaInsets
         }
         insets.top = max(20, insets.top)
-        
+
         mainScrollView.frame = view.bounds
         resetContainerViewFrame()
-        
+
         topShadowView.frame = CGRect(x: 0, y: 0, width: view.maha.width, height: 150)
         topShadowLayer.frame = topShadowView.bounds
         let cancelBtnW = localLanguageTextValue(.cancel)
@@ -583,15 +583,15 @@ open class MahaEditImageViewController: UIViewController {
             redoBtn.frame = CGRect(x: view.maha.width - 15 - 30, y: insets.top, width: 30, height: 30)
             undoBtn.frame = CGRect(x: redoBtn.maha.left - 15 - 30, y: insets.top, width: 30, height: 30)
         }
-        
+
         bottomShadowView.frame = CGRect(x: 0, y: view.maha.height - 150 - insets.bottom, width: view.maha.width, height: 150 + insets.bottom)
         bottomShadowLayer.frame = bottomShadowView.bounds
-        
+
         eraserBtn.frame = CGRect(x: 20, y: 30 + (drawColViewH - 36) / 2, width: 36, height: 36)
         eraserBtnBgBlurView.frame = eraserBtn.frame
         eraserLineView.frame = CGRect(x: eraserBtn.maha.right + 11, y: eraserBtn.frame.midY - 10, width: 1, height: 20)
         drawColorCollectionView?.frame = CGRect(x: eraserLineView.maha.right + 11, y: 30, width: view.maha.width - eraserLineView.maha.right - 31, height: drawColViewH)
-        
+
         adjustCollectionView?.frame = CGRect(x: 20, y: 20, width: view.maha.width - 40, height: adjustColViewH)
         if MahaPhotoUIConfiguration.default().adjustSliderType == .vertical {
             adjustSlider?.frame = CGRect(x: view.maha.width - 60, y: view.maha.height / 2 - 100, width: 60, height: 200)
@@ -605,32 +605,32 @@ open class MahaEditImageViewController: UIViewController {
                 height: sliderHeight
             )
         }
-        
+
         filterCollectionView?.frame = CGRect(x: 20, y: 0, width: view.maha.width - 40, height: filterColViewH)
-        
+
         ashbinView.frame = CGRect(
             x: (view.maha.width - Self.ashbinSize.width) / 2,
             y: view.maha.height - Self.ashbinSize.height - 40,
             width: Self.ashbinSize.width,
             height: Self.ashbinSize.height
         )
-        
+
         ashbinImgView.frame = CGRect(
             x: (Self.ashbinSize.width - 25) / 2,
             y: 15,
             width: 25,
             height: 25
         )
-        
+
         let toolY: CGFloat = 95
-        
+
         let doneBtnH = MahaLayout.bottomToolBtnH
         let doneBtnW = localLanguageTextValue(.editFinish).maha.boundingRect(font: MahaLayout.bottomToolTitleFont, limitSize: CGSize(width: CGFloat.greatestFiniteMagnitude, height: doneBtnH)).width + 20
         doneBtn.frame = CGRect(x: view.maha.width - 20 - doneBtnW, y: toolY - 2, width: doneBtnW, height: doneBtnH)
-        
+
         let editToolWidth = view.maha.width - 20 - 20 - doneBtnW - 20
         editToolCollectionView.frame = CGRect(x: 20, y: toolY, width: editToolWidth, height: 30)
-        
+
         if MahaPhotoUIConfiguration.default().shouldCenterTools {
             let editToolLayout = editToolCollectionView.collectionViewLayout as? MahaCollectionViewFlowLayout
             let itemSize = editToolLayout?.itemSize.width ?? 0
@@ -641,25 +641,25 @@ open class MahaEditImageViewController: UIViewController {
                 editToolCollectionView.contentInset.right = sideInset
             }
         }
-        
+
         if !drawPaths.isEmpty {
             drawLine()
         }
         if !mosaicPaths.isEmpty {
             generateNewMosaicImage()
         }
-        
+
         if let index = drawColors.firstIndex(where: { $0 == self.currentDrawColor }) {
             drawColorCollectionView?.scrollToItem(at: IndexPath(row: index, section: 0), at: .centeredHorizontally, animated: false)
         }
-        
+
         let contentRatio = mainScrollView.contentSize.width / mainScrollView.contentSize.height
         let screenRatio = mainScrollView.bounds.size.width / mainScrollView.bounds.size.height
         if abs(contentRatio - screenRatio) < 0.01 {
             mainScrollView.setZoomScale(mainScrollView.minimumZoomScale, animated: true)
         }
     }
-    
+
     override open func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
         super.viewWillTransition(to: size, with: coordinator)
         shouldLayout = true
@@ -675,11 +675,11 @@ open class MahaEditImageViewController: UIViewController {
             size = CGSize(width: fixLength, height: fixLength / ratio)
         }
         let thumbnailImage = originalImage.maha.resize_vI(size) ?? originalImage
-        
+
         DispatchQueue.global().async {
             let filters = MahaPhotoConfiguration.default().editImageConfiguration.filters
-            self.thumbnailFilterImages = filters.map { $0.applier?(thumbnailImage) ?? thumbnailImage }
-            
+            self.filterPreviewImages = filters.map { $0.applier?(thumbnailImage) ?? thumbnailImage }
+
             MahaMainAsync {
                 self.filterCollectionView?.reloadData()
                 self.filterCollectionView?.performBatchUpdates {} completion: { _ in
@@ -690,18 +690,18 @@ open class MahaEditImageViewController: UIViewController {
             }
         }
     }
-    
+
     private func resetContainerViewFrame() {
         mainScrollView.setZoomScale(1, animated: true)
         imageView.image = editImage
         let editRect = currentClipStatus.editRect
-        
+
         let editSize = editRect.size
         let scrollViewSize = mainScrollView.frame.size
         let ratio = min(scrollViewSize.width / editSize.width, scrollViewSize.height / editSize.height)
         let w = ratio * editSize.width * mainScrollView.zoomScale
         let h = ratio * editSize.height * mainScrollView.zoomScale
-        
+
         let imageRatio = originalImage.size.width / originalImage.size.height
         let y: CGFloat
         // 从相机进入，且竖屏拍照，才做适配
@@ -710,7 +710,7 @@ open class MahaEditImageViewController: UIViewController {
            imageRatio < 1 {
             let cameraRatio: CGFloat = 16 / 9
             let layerH = min(view.maha.width * cameraRatio, view.maha.height)
-            
+
             if isSmallScreen() {
                 y = deviceIsFringeScreen() ? min(94, view.maha.height - layerH) : 0
             } else {
@@ -719,9 +719,9 @@ open class MahaEditImageViewController: UIViewController {
         } else {
             y = max(0, (scrollViewSize.height - h) / 2)
         }
-        
+
         isFirstSetContainerFrame = false
-        
+
         containerView.frame = CGRect(x: max(0, (scrollViewSize.width - w) / 2), y: y, width: w, height: h)
         mainScrollView.contentSize = containerView.frame.size
 
@@ -740,7 +740,7 @@ open class MahaEditImageViewController: UIViewController {
         mosaicImageLayerMaskLayer?.frame = imageView.bounds
         drawingImageView.frame = imageView.frame
         stickersContainer.frame = imageView.frame
-        
+
         // 针对于长图的优化
         if (editRect.height / editRect.width) > (view.frame.height / view.frame.width * 1.1) {
             let widthScale = view.frame.width / w
@@ -750,39 +750,39 @@ open class MahaEditImageViewController: UIViewController {
         } else if editRect.width / editRect.height > 1 {
             mainScrollView.maximumZoomScale = max(3, view.frame.height / h)
         }
-        
+
         originalFrame = view.convert(containerView.frame, from: mainScrollView)
         isScrolling = false
     }
-    
+
     private func setupUI() {
         view.backgroundColor = .black
-        
+
         view.addSubview(mainScrollView)
         mainScrollView.addSubview(containerView)
         containerView.addSubview(imageView)
         containerView.addSubview(drawingImageView)
         containerView.addSubview(stickersContainer)
-        
+
         topShadowView.layer.addSublayer(topShadowLayer)
         view.addSubview(topShadowView)
         topShadowView.addSubview(cancelBtn)
         topShadowView.addSubview(undoBtn)
         topShadowView.addSubview(redoBtn)
-        
+
         bottomShadowView.layer.addSublayer(bottomShadowLayer)
         view.addSubview(bottomShadowView)
         bottomShadowView.addSubview(editToolCollectionView)
         bottomShadowView.addSubview(doneBtn)
-        
+
         if tools.contains(.draw) {
             bottomShadowView.addSubview(eraserBtnBgBlurView)
             bottomShadowView.addSubview(eraserBtn)
             bottomShadowView.addSubview(eraserLineView)
             containerView.addSubview(eraserCircleView)
-            
+
             impactFeedback = UIImpactFeedbackGenerator(style: .light)
-            
+
             let drawColorLayout = MahaCollectionViewFlowLayout()
             let drawColorItemWidth: CGFloat = 36
             drawColorLayout.itemSize = CGSize(width: drawColorItemWidth, height: drawColorItemWidth)
@@ -791,57 +791,57 @@ open class MahaEditImageViewController: UIViewController {
             drawColorLayout.scrollDirection = .horizontal
             let drawColorTopBottomInset = (drawColViewH - drawColorItemWidth) / 2
             drawColorLayout.sectionInset = UIEdgeInsets(top: drawColorTopBottomInset, left: 0, bottom: drawColorTopBottomInset, right: 0)
-            
+
             let drawCV = UICollectionView(frame: .zero, collectionViewLayout: drawColorLayout)
             drawCV.backgroundColor = .clear
             drawCV.delegate = self
             drawCV.dataSource = self
             drawCV.isHidden = true
             bottomShadowView.addSubview(drawCV)
-            
+
             MahaDrawColorCell.maha.register(drawCV)
             drawColorCollectionView = drawCV
         }
-        
+
         if tools.contains(.filter) {
             if let applier = currentFilter.applier {
                 let image = applier(originalImage)
                 editImage = image
                 editImageWithoutAdjust = image
-                filterImages[currentFilter.name] = image
+                cachedFilterImages[currentFilter.name] = image
             }
-            
+
             let filterLayout = MahaCollectionViewFlowLayout()
             filterLayout.itemSize = CGSize(width: filterColViewH - 30, height: filterColViewH - 10)
             filterLayout.minimumLineSpacing = 15
             filterLayout.minimumInteritemSpacing = 15
             filterLayout.scrollDirection = .horizontal
             filterLayout.sectionInset = UIEdgeInsets(top: 0, left: 0, bottom: 10, right: 0)
-            
+
             let filterCV = UICollectionView(frame: .zero, collectionViewLayout: filterLayout)
             filterCV.backgroundColor = .clear
             filterCV.delegate = self
             filterCV.dataSource = self
             filterCV.isHidden = true
             bottomShadowView.addSubview(filterCV)
-            
+
             MahaFilterImageCell.maha.register(filterCV)
             filterCollectionView = filterCV
         }
-        
+
         if tools.contains(.adjust) {
             editImage = editImage.maha.adjust(
                 brightness: currentAdjustStatus.brightness,
                 contrast: currentAdjustStatus.contrast,
                 saturation: currentAdjustStatus.saturation
             ) ?? editImage
-            
+
             let adjustLayout = MahaCollectionViewFlowLayout()
             adjustLayout.itemSize = CGSize(width: adjustColViewH, height: adjustColViewH)
             adjustLayout.minimumLineSpacing = 10
             adjustLayout.minimumInteritemSpacing = 10
             adjustLayout.scrollDirection = .horizontal
-            
+
             let adjustCV = UICollectionView(frame: .zero, collectionViewLayout: adjustLayout)
             adjustCV.backgroundColor = .clear
             adjustCV.delegate = self
@@ -849,13 +849,13 @@ open class MahaEditImageViewController: UIViewController {
             adjustCV.isHidden = true
             adjustCV.showsHorizontalScrollIndicator = false
             bottomShadowView.addSubview(adjustCV)
-            
+
             MahaAdjustToolCell.maha.register(adjustCV)
             adjustCollectionView = adjustCV
-            
+
             adjustSlider = MahaAdjustSlider()
-            if let selectedAdjustTool = selectedAdjustTool {
-                changeAdjustTool(selectedAdjustTool)
+            if let activeAdjustTool = activeAdjustTool {
+                updateSelectedAdjustTool(activeAdjustTool)
             }
             adjustSlider?.beginAdjust = { [weak self] in
                 guard let `self` = self else { return }
@@ -874,10 +874,10 @@ open class MahaEditImageViewController: UIViewController {
             adjustSlider?.isHidden = true
             view.addSubview(adjustSlider!)
         }
-        
+
         view.addSubview(ashbinView)
         ashbinView.addSubview(ashbinImgView)
-        
+
         let asbinTipLabel = UILabel(frame: CGRect(x: 0, y: Self.ashbinSize.height - 34, width: Self.ashbinSize.width, height: 34))
         asbinTipLabel.font = .maha.font(ofSize: 12)
         asbinTipLabel.textAlignment = .center
@@ -886,46 +886,46 @@ open class MahaEditImageViewController: UIViewController {
         asbinTipLabel.numberOfLines = 2
         asbinTipLabel.lineBreakMode = .byCharWrapping
         ashbinView.addSubview(asbinTipLabel)
-        
+
         if tools.contains(.mosaic) {
             mosaicImage = editImage.maha.mosaicImage()
-            
+
             mosaicImageLayer = CALayer()
             mosaicImageLayer?.contents = mosaicImage?.cgImage
             imageView.layer.addSublayer(mosaicImageLayer!)
-            
+
             mosaicImageLayerMaskLayer = CAShapeLayer()
             mosaicImageLayerMaskLayer?.strokeColor = UIColor.blue.cgColor
             mosaicImageLayerMaskLayer?.fillColor = nil
             mosaicImageLayerMaskLayer?.lineCap = .round
             mosaicImageLayerMaskLayer?.lineJoin = .round
             imageView.layer.addSublayer(mosaicImageLayerMaskLayer!)
-            
+
             mosaicImageLayer?.mask = mosaicImageLayerMaskLayer
         }
-        
+
         if tools.contains(.imageSticker) {
             let imageStickerView = MahaPhotoConfiguration.default().editImageConfiguration.imageStickerContainerView
             imageStickerView?.hideBlock = { [weak self] in
-                self?.setToolView(show: true)
-                self?.imageStickerContainerIsHidden = true
+                self?.setToolViewsVisible(true)
+                self?.isImageStickerContainerHidden = true
             }
-            
+
             imageStickerView?.selectImageBlock = { [weak self] image in
                 self?.addImageStickerView(image)
             }
         }
-        
+
         let tapGes = UITapGestureRecognizer(target: self, action: #selector(tapAction(_:)))
         tapGes.delegate = self
         view.addGestureRecognizer(tapGes)
-        
+
         view.addGestureRecognizer(panGes)
         mainScrollView.panGestureRecognizer.require(toFail: panGes)
-        
+
         stickers.forEach { self.addSticker($0) }
     }
-    
+
     /// 根据point查找可响应的sticker
     private func findResponderSticker(_ point: CGPoint) -> UIView? {
         // 倒序查找subview
@@ -935,54 +935,47 @@ open class MahaEditImageViewController: UIViewController {
                 return sticker
             }
         }
-        
+
         return nil
     }
-    
+
     private func rotationImageView() {
         let transform = CGAffineTransform(rotationAngle: currentClipStatus.angle.maha.toPi)
         imageView.transform = transform
         drawingImageView.transform = transform
         stickersContainer.transform = transform
     }
-    
+
     @objc private func cancelBtnClick() {
         dismiss(animated: animate) {
             self.cancelEditBlock?()
         }
     }
-    
+
     private func drawBtnClick() {
-        let isSelected = selectedTool != .draw
-        if isSelected {
-            selectedTool = .draw
-        } else {
-            selectedTool = nil
-        }
-        
-        setDrawViews(hidden: !isSelected)
-        setFilterViews(hidden: true)
-        setAdjustViews(hidden: true)
+        let shouldSelect = activeTool != .draw
+        activeTool = shouldSelect ? .draw : nil
+        updateToolPanels(drawHidden: !shouldSelect, filterHidden: true, adjustHidden: true)
     }
-    
+
     @objc private func eraserBtnClick() {
-        switchEraserBtnStatus(!eraserBtn.isSelected)
+        updateEraserButtonSelection(!eraserBtn.isSelected)
     }
-    
-    private func switchEraserBtnStatus(_ isSelected: Bool, reloadData: Bool = true) {
+
+    private func updateEraserButtonSelection(_ isSelected: Bool, reloadData: Bool = true) {
         guard eraserBtn.isSelected != isSelected else { return }
-        
+
         eraserBtn.isSelected = isSelected
         eraserBtnBgBlurView.isHidden = !isSelected
-        
+
         if reloadData {
             drawColorCollectionView?.reloadData()
         }
     }
-    
+
     private func clipBtnClick() {
         preClipStatus = currentClipStatus
-        
+
         let currentEditImage = buildImage()
         let vc = MahaClipImageViewController(image: currentEditImage, status: currentClipStatus)
         let rect = mainScrollView.convert(containerView.frame, to: view)
@@ -994,31 +987,29 @@ open class MahaEditImageViewController: UIViewController {
                 isCircle: currentClipStatus.ratio?.isCircle ?? false
             )
         vc.modalPresentationStyle = .fullScreen
-        
+
         vc.clipDoneBlock = { [weak self] angle, editRect, selectRatio in
             guard let `self` = self else { return }
-            
+
             self.clipImage(status: MahaClipStatus(editRect: editRect, angle: angle, ratio: selectRatio))
             self.editorManager.storeAction(.clip(oldStatus: self.preClipStatus, newStatus: self.currentClipStatus))
         }
-        
+
         vc.cancelClipBlock = { [weak self] () in
             self?.resetContainerViewFrame()
         }
-        
+
         present(vc, animated: false) {
             self.mainScrollView.alpha = 0
             self.topShadowView.alpha = 0
             self.bottomShadowView.alpha = 0
             self.adjustSlider?.alpha = 0
         }
-        
-        selectedTool = nil
-        setDrawViews(hidden: true)
-        setFilterViews(hidden: true)
-        setAdjustViews(hidden: true)
+
+        activeTool = nil
+        hideAllToolPanels()
     }
-    
+
     private func clipImage(status: MahaClipStatus) {
         let oldAngle = currentClipStatus.angle
         let oldContainerSize = stickersContainer.frame.size
@@ -1026,24 +1017,22 @@ open class MahaEditImageViewController: UIViewController {
             currentClipStatus.angle = status.angle
             rotationImageView()
         }
-        
+
         currentClipStatus.editRect = status.editRect
         currentClipStatus.ratio = status.ratio
         resetContainerViewFrame()
         recalculateStickersFrame(oldContainerSize, oldAngle, status.angle)
     }
-    
+
     private func imageStickerBtnClick() {
         MahaPhotoConfiguration.default().editImageConfiguration.imageStickerContainerView?.show(in: view)
-        setToolView(show: false)
-        imageStickerContainerIsHidden = false
-        
-        selectedTool = nil
-        setDrawViews(hidden: true)
-        setFilterViews(hidden: true)
-        setAdjustViews(hidden: true)
+        setToolViewsVisible(false)
+        isImageStickerContainerHidden = false
+
+        activeTool = nil
+        hideAllToolPanels()
     }
-    
+
     private func textStickerBtnClick() {
         showInputTextVC(
             font: MahaPhotoConfiguration.default().editImageConfiguration.textStickerDefaultFont
@@ -1051,73 +1040,62 @@ open class MahaEditImageViewController: UIViewController {
             guard !text.isEmpty, let image = image else { return }
             self?.addTextStickersView(text, textColor: textColor, font: font, image: image, style: style)
         }
-        
-        selectedTool = nil
-        setDrawViews(hidden: true)
-        setFilterViews(hidden: true)
-        setAdjustViews(hidden: true)
+
+        activeTool = nil
+        hideAllToolPanels()
     }
-    
+
     private func mosaicBtnClick() {
-        let isSelected = selectedTool != .mosaic
-        if isSelected {
-            selectedTool = .mosaic
-        } else {
-            selectedTool = nil
-        }
-        
+        let shouldSelect = activeTool != .mosaic
+        activeTool = shouldSelect ? .mosaic : nil
+
         generateNewMosaicLayerIfAdjust()
-        setDrawViews(hidden: true)
-        setFilterViews(hidden: true)
-        setAdjustViews(hidden: true)
+        hideAllToolPanels()
     }
-    
+
     private func filterBtnClick() {
-        let isSelected = selectedTool != .filter
-        if isSelected {
-            selectedTool = .filter
-        } else {
-            selectedTool = nil
-        }
-        
-        setDrawViews(hidden: true)
-        setFilterViews(hidden: !isSelected)
-        setAdjustViews(hidden: true)
+        let shouldSelect = activeTool != .filter
+        activeTool = shouldSelect ? .filter : nil
+        updateToolPanels(drawHidden: true, filterHidden: !shouldSelect, adjustHidden: true)
     }
-    
+
     private func adjustBtnClick() {
-        let isSelected = selectedTool != .adjust
-        if isSelected {
-            selectedTool = .adjust
-        } else {
-            selectedTool = nil
-        }
-        
+        let shouldSelect = activeTool != .adjust
+        activeTool = shouldSelect ? .adjust : nil
+
         generateAdjustImageRef()
-        setDrawViews(hidden: true)
-        setFilterViews(hidden: true)
-        setAdjustViews(hidden: !isSelected)
+        updateToolPanels(drawHidden: true, filterHidden: true, adjustHidden: !shouldSelect)
     }
-    
-    private func setDrawViews(hidden: Bool) {
+
+    private func updateDrawToolViews(hidden: Bool) {
         eraserBtn.isHidden = hidden
         eraserBtnBgBlurView.isHidden = hidden || !eraserBtn.isSelected
         eraserLineView.isHidden = hidden
         drawColorCollectionView?.isHidden = hidden
     }
-    
-    private func setFilterViews(hidden: Bool) {
+
+    private func updateFilterToolViews(hidden: Bool) {
         filterCollectionView?.isHidden = hidden
     }
-    
-    private func setAdjustViews(hidden: Bool) {
+
+    private func updateAdjustToolViews(hidden: Bool) {
         adjustCollectionView?.isHidden = hidden
         adjustSlider?.isHidden = hidden
     }
-    
-    private func changeAdjustTool(_ tool: MahaEditImageConfiguration.AdjustTool) {
-        selectedAdjustTool = tool
-        
+
+    private func updateToolPanels(drawHidden: Bool, filterHidden: Bool, adjustHidden: Bool) {
+        updateDrawToolViews(hidden: drawHidden)
+        updateFilterToolViews(hidden: filterHidden)
+        updateAdjustToolViews(hidden: adjustHidden)
+    }
+
+    private func hideAllToolPanels() {
+        updateToolPanels(drawHidden: true, filterHidden: true, adjustHidden: true)
+    }
+
+    private func updateSelectedAdjustTool(_ tool: MahaEditImageConfiguration.AdjustTool) {
+        activeAdjustTool = tool
+
         switch tool {
         case .brightness:
             adjustSlider?.value = currentAdjustStatus.brightness
@@ -1127,14 +1105,14 @@ open class MahaEditImageViewController: UIViewController {
             adjustSlider?.value = currentAdjustStatus.saturation
         }
     }
-    
+
     @objc private func doneBtnClick() {
         var stickerStates: [MahaBaseStickertState] = []
         for view in stickersContainer.subviews {
             guard let view = view as? MahaBaseStickerView else { continue }
             stickerStates.append(view.state)
         }
-        
+
         var hasEdit = true
         if drawPaths.isEmpty,
            currentClipStatus.editRect.size == imageSize,
@@ -1145,10 +1123,10 @@ open class MahaEditImageViewController: UIViewController {
            currentAdjustStatus.allValueIsZero {
             hasEdit = false
         }
-        
+
         var resImage = originalImage
         var editModel: MahaEditImageModel?
-        
+
         func callback() {
             // 内部自己调用，先回调在退出
             if let nav = presentingViewController as? MahaImageNavController,
@@ -1161,12 +1139,12 @@ open class MahaEditImageViewController: UIViewController {
                 }
             }
         }
-        
+
         guard hasEdit else {
             callback()
             return
         }
-        
+
         let hud = MahaProgressHUD.show(toast: .processing)
         DispatchQueue.main.async { [self] in
             resImage = buildImage()
@@ -1190,35 +1168,35 @@ open class MahaEditImageViewController: UIViewController {
             callback()
         }
     }
-    
+
     @objc private func undoBtnClick() {
         editorManager.undoAction()
     }
-    
+
     @objc private func redoBtnClick() {
         editorManager.redoAction()
     }
-    
+
     @objc private func tapAction(_ tap: UITapGestureRecognizer) {
         if bottomShadowView.alpha == 1 {
-            setToolView(show: false)
+            setToolViewsVisible(false)
         } else {
-            setToolView(show: true)
+            setToolViewsVisible(true)
         }
     }
-    
+
     @objc private func drawAction(_ pan: UIPanGestureRecognizer) {
         // 橡皮擦
-        if selectedTool == .draw, eraserBtn.isSelected {
+        if activeTool == .draw, eraserBtn.isSelected {
             eraserAction(pan)
             return
         }
-        
-        if selectedTool == .draw {
+
+        if activeTool == .draw {
             let point = pan.location(in: drawingImageView)
             if pan.state == .began {
-                setToolView(show: false)
-                
+                setToolViewsVisible(false)
+
                 let originalRatio = min(mainScrollView.frame.width / originalImage.size.width, mainScrollView.frame.height / originalImage.size.height)
                 let ratio = min(
                     mainScrollView.frame.width / currentClipStatus.editRect.width,
@@ -1232,12 +1210,12 @@ open class MahaEditImageViewController: UIViewController {
                 if shouldSwapSize {
                     swap(&size.width, &size.height)
                 }
-                
+
                 var toImageScale = MahaEditImageViewController.maxDrawLineImageWidth / size.width
                 if editImage.size.width / editImage.size.height > 1 {
                     toImageScale = MahaEditImageViewController.maxDrawLineImageWidth / size.height
                 }
-                
+
                 let path = MahaDrawPath(
                     pathColor: currentDrawColor,
                     pathWidth: drawLineWidth / mainScrollView.zoomScale,
@@ -1251,17 +1229,17 @@ open class MahaEditImageViewController: UIViewController {
                 path?.addLine(to: point)
                 drawLine()
             } else if pan.state == .cancelled || pan.state == .ended {
-                setToolView(show: true, delay: 0.5)
-                
+                setToolViewsVisible(true, delay: 0.5)
+
                 if let path = drawPaths.last {
                     editorManager.storeAction(.draw(path))
                 }
             }
-        } else if selectedTool == .mosaic {
+        } else if activeTool == .mosaic {
             let point = pan.location(in: imageView)
             if pan.state == .began {
-                setToolView(show: false)
-                
+                setToolViewsVisible(false)
+
                 var actualSize = currentClipStatus.editRect.size
                 if shouldSwapSize {
                     swap(&actualSize.width, &actualSize.height)
@@ -1270,10 +1248,10 @@ open class MahaEditImageViewController: UIViewController {
                     mainScrollView.frame.width / currentClipStatus.editRect.width,
                     mainScrollView.frame.height / currentClipStatus.editRect.height
                 )
-                
+
                 let pathW = mosaicLineWidth / mainScrollView.zoomScale
                 let path = MahaMosaicPath(pathWidth: pathW, ratio: ratio, startPoint: point)
-                
+
                 mosaicImageLayerMaskLayer?.lineWidth = pathW
                 mosaicImageLayerMaskLayer?.path = path.path.cgPath
                 mosaicPaths.append(path)
@@ -1282,16 +1260,16 @@ open class MahaEditImageViewController: UIViewController {
                 path?.addLine(to: point)
                 mosaicImageLayerMaskLayer?.path = path?.path.cgPath
             } else if pan.state == .cancelled || pan.state == .ended {
-                setToolView(show: true, delay: 0.5)
+                setToolViewsVisible(true, delay: 0.5)
                 if let path = mosaicPaths.last {
                     editorManager.storeAction(.mosaic(path))
                 }
-                
+
                 generateNewMosaicImage()
             }
         }
     }
-    
+
     private func eraserAction(_ pan: UIPanGestureRecognizer) {
         // 相对于drawingImageView的point
         let point = pan.location(in: drawingImageView)
@@ -1308,12 +1286,12 @@ open class MahaEditImageViewController: UIViewController {
         if shouldSwapSize {
             swap(&size.width, &size.height)
         }
-        
+
         var toImageScale = MahaEditImageViewController.maxDrawLineImageWidth / size.width
         if editImage.size.width / editImage.size.height > 1 {
             toImageScale = MahaEditImageViewController.maxDrawLineImageWidth / size.height
         }
-        
+
         let pointScale = ratio / originalRatio / toImageScale
         // 转换为drawPath的point
         let drawPoint = CGPoint(x: point.x / pointScale, y: point.y / pointScale)
@@ -1322,10 +1300,10 @@ open class MahaEditImageViewController: UIViewController {
             eraserCircleView.isHidden = false
             impactFeedback?.prepare()
         }
-        
+
         if pan.state == .began || pan.state == .changed {
             var transform: CGAffineTransform = .identity
-            
+
             let angle = ((Int(currentClipStatus.angle) % 360) + 360) % 360
             let drawingImageViewSize = drawingImageView.frame.size
             if angle == 90 {
@@ -1340,12 +1318,12 @@ open class MahaEditImageViewController: UIViewController {
             // 将变换后的点转换到 containerView 的坐标系
             let pointInContainerView = drawingImageView.convert(transformedPoint, to: containerView)
             eraserCircleView.center = pointInContainerView
-            
+
             var needDraw = false
             for path in drawPaths {
-                if path.path.contains(drawPoint), !deleteDrawPaths.contains(path) {
-                    path.willDelete = true
-                    deleteDrawPaths.append(path)
+                if path.path.contains(drawPoint), !pendingDeletedDrawPaths.contains(path) {
+                    path.isPendingDeletion = true
+                    pendingDeletedDrawPaths.append(path)
                     needDraw = true
                     impactFeedback?.impactOccurred()
                 }
@@ -1356,92 +1334,92 @@ open class MahaEditImageViewController: UIViewController {
         } else {
             eraserCircleView.transform = .identity
             eraserCircleView.isHidden = true
-            if !deleteDrawPaths.isEmpty {
-                editorManager.storeAction(.eraser(deleteDrawPaths))
-                drawPaths.removeAll { deleteDrawPaths.contains($0) }
-                deleteDrawPaths.removeAll()
+            if !pendingDeletedDrawPaths.isEmpty {
+                editorManager.storeAction(.eraser(pendingDeletedDrawPaths))
+                drawPaths.removeAll { pendingDeletedDrawPaths.contains($0) }
+                pendingDeletedDrawPaths.removeAll()
                 drawLine()
             }
         }
     }
-    
+
     // 生成一个没有调整参数前的图片
     private func generateAdjustImageRef() {
         editImageAdjustRef = generateNewMosaicImage(inputImage: editImageWithoutAdjust, inputMosaicImage: editImageWithoutAdjust.maha.mosaicImage())
     }
-    
+
     private func adjustValueChanged(_ value: Float) {
-        guard let selectedAdjustTool else {
+        guard let activeAdjustTool else {
             return
         }
-        
-        switch selectedAdjustTool {
+
+        switch activeAdjustTool {
         case .brightness:
             if currentAdjustStatus.brightness == value {
                 return
             }
-            
+
             currentAdjustStatus.brightness = value
         case .contrast:
             if currentAdjustStatus.contrast == value {
                 return
             }
-            
+
             currentAdjustStatus.contrast = value
         case .saturation:
             if currentAdjustStatus.saturation == value {
                 return
             }
-            
+
             currentAdjustStatus.saturation = value
         }
-        
+
         adjustStatusChanged()
     }
-    
+
     private func adjustStatusChanged() {
         let resultImage = editImageAdjustRef?.maha.adjust(
             brightness: currentAdjustStatus.brightness,
             contrast: currentAdjustStatus.contrast,
             saturation: currentAdjustStatus.saturation
         )
-        
+
         guard let resultImage else { return }
-        
+
         editImage = resultImage
         imageView.image = editImage
     }
-    
+
     private func generateNewMosaicLayerIfAdjust() {
         defer {
             hasAdjustedImage = false
         }
-        
+
         guard tools.contains(.mosaic), hasAdjustedImage else { return }
-        
+
         generateNewMosaicImageLayer()
-        
+
         if !mosaicPaths.isEmpty {
             generateNewMosaicImage()
         }
     }
-    
-    private func setToolView(show: Bool, delay: TimeInterval? = nil) {
-        cleanToolViewStateTimer()
+
+    private func setToolViewsVisible(_ show: Bool, delay: TimeInterval? = nil) {
+        invalidateToolViewVisibilityTimer()
         if let delay = delay {
-            toolViewStateTimer = Timer.scheduledTimer(timeInterval: delay, target: MahaWeakProxy(target: self), selector: #selector(setToolViewShow_timerFunc(show:)), userInfo: ["show": show], repeats: false)
-            RunLoop.current.add(toolViewStateTimer!, forMode: .common)
+            toolViewVisibilityTimer = Timer.scheduledTimer(timeInterval: delay, target: MahaWeakProxy(target: self), selector: #selector(applyToolViewVisibilityFromTimer(show:)), userInfo: ["show": show], repeats: false)
+            RunLoop.current.add(toolViewVisibilityTimer!, forMode: .common)
         } else {
-            setToolViewShow_timerFunc(show: show)
+            applyToolViewVisibilityFromTimer(show: show)
         }
     }
-    
-    @objc private func setToolViewShow_timerFunc(show: Bool) {
+
+    @objc private func applyToolViewVisibilityFromTimer(show: Bool) {
         var flag = show
-        if let toolViewStateTimer = toolViewStateTimer {
-            let userInfo = toolViewStateTimer.userInfo as? [String: Any]
+        if let toolViewVisibilityTimer = toolViewVisibilityTimer {
+            let userInfo = toolViewVisibilityTimer.userInfo as? [String: Any]
             flag = userInfo?["show"] as? Bool ?? true
-            cleanToolViewStateTimer()
+            invalidateToolViewVisibilityTimer()
         }
         topShadowView.layer.removeAllAnimations()
         bottomShadowView.layer.removeAllAnimations()
@@ -1460,12 +1438,12 @@ open class MahaEditImageViewController: UIViewController {
             }
         }
     }
-    
-    private func cleanToolViewStateTimer() {
-        toolViewStateTimer?.invalidate()
-        toolViewStateTimer = nil
+
+    private func invalidateToolViewVisibilityTimer() {
+        toolViewVisibilityTimer?.invalidate()
+        toolViewVisibilityTimer = nil
     }
-    
+
     private func showInputTextVC(_ text: String? = nil, textColor: UIColor? = nil, font: UIFont? = nil, style: MahaInputTextStyle = .normal, completion: @escaping ((String, UIColor, UIFont, UIImage?, MahaInputTextStyle) -> Void)) {
         // Calculate image displayed frame on the screen.
         var r = mainScrollView.convert(view.frame, to: containerView)
@@ -1481,15 +1459,15 @@ open class MahaEditImageViewController: UIViewController {
             .maha.clipImage(angle: currentClipStatus.angle, editRect: currentClipStatus.editRect, isCircle: isCircle)
             .maha.clipImage(angle: 0, editRect: r, isCircle: isCircle)
         let vc = MahaInputTextViewController(image: bgImage, text: text, textColor: textColor, font: font, style: style)
-        
+
         vc.endInput = { text, textColor, font, image, style in
             completion(text, textColor, font, image, style)
         }
-        
+
         vc.modalPresentationStyle = .fullScreen
         showDetailViewController(vc, sender: nil)
     }
-    
+
     private func getStickerOriginFrame(_ size: CGSize) -> CGRect {
         let scale = mainScrollView.zoomScale
         // Calculate the display rect of container view.
@@ -1502,28 +1480,28 @@ open class MahaEditImageViewController: UIViewController {
         let originFrame = CGRect(x: r.minX + (r.width - size.width) / 2, y: r.minY + (r.height - size.height) / 2, width: size.width, height: size.height)
         return originFrame
     }
-    
+
     /// Add image sticker
     private func addImageStickerView(_ image: UIImage) {
         let scale = mainScrollView.zoomScale
         let size = MahaImageStickerView.calculateSize(image: image, width: view.frame.width)
         let originFrame = getStickerOriginFrame(size)
-        
+
         let imageSticker = MahaImageStickerView(image: image, originScale: 1 / scale, originAngle: -currentClipStatus.angle, originFrame: originFrame)
         addSticker(imageSticker)
         view.layoutIfNeeded()
-        
+
         editorManager.storeAction(.sticker(oldState: nil, newState: imageSticker.state))
     }
-    
+
     /// Add text sticker
     private func addTextStickersView(_ text: String, textColor: UIColor, font: UIFont, image: UIImage, style: MahaInputTextStyle) {
         guard !text.isEmpty else { return }
-        
+
         let scale = mainScrollView.zoomScale
         let size = MahaTextStickerView.calculateSize(image: image)
         let originFrame = getStickerOriginFrame(size)
-        
+
         let textSticker = MahaTextStickerView(
             text: text,
             textColor: textColor,
@@ -1535,38 +1513,38 @@ open class MahaEditImageViewController: UIViewController {
             originFrame: originFrame
         )
         addSticker(textSticker)
-        
+
         editorManager.storeAction(.sticker(oldState: nil, newState: textSticker.state))
     }
-    
+
     private func addSticker(_ sticker: MahaBaseStickerView) {
         stickersContainer.addSubview(sticker)
         sticker.frame = sticker.originFrame
         configSticker(sticker)
     }
-    
+
     private func removeSticker(id: String?) {
         guard let id else { return }
-        
+
         for sticker in stickersContainer.subviews.reversed() {
             guard let stickerID = (sticker as? MahaBaseStickerView)?.id,
                   stickerID == id else {
                 continue
             }
-            
+
             (sticker as? MahaBaseStickerView)?.moveToAshbin()
-            
+
             break
         }
     }
-    
+
     private func configSticker(_ sticker: MahaBaseStickerView) {
         sticker.delegate = self
-        mainScrollView.pinchGestureRecognizer?.require(toFail: sticker.pinchGes)
-        mainScrollView.panGestureRecognizer.require(toFail: sticker.panGes)
-        panGes.require(toFail: sticker.panGes)
+        mainScrollView.pinchGestureRecognizer?.require(toFail: sticker.pinchGesture)
+        mainScrollView.panGestureRecognizer.require(toFail: sticker.panGesture)
+        panGes.require(toFail: sticker.panGesture)
     }
-    
+
     private func recalculateStickersFrame(_ oldSize: CGSize, _ oldAngle: CGFloat, _ newAngle: CGFloat) {
         let currSize = stickersContainer.frame.size
         let scale: CGFloat
@@ -1575,12 +1553,12 @@ open class MahaEditImageViewController: UIViewController {
         } else {
             scale = currSize.height / oldSize.width
         }
-        
+
         stickersContainer.subviews.forEach { view in
             (view as? MahaStickerViewAdditional)?.addScale(scale)
         }
     }
-    
+
     private func drawLine() {
         let originalRatio = min(mainScrollView.frame.width / originalImage.size.width, mainScrollView.frame.height / originalImage.size.height)
         let ratio = min(
@@ -1601,8 +1579,8 @@ open class MahaEditImageViewController: UIViewController {
         }
         size.width *= toImageScale
         size.height *= toImageScale
-        
-        
+
+
         drawingImageView.image = UIGraphicsImageRenderer.maha.renderImage(size: size) { context in
             context.setAllowsAntialiasing(true)
             context.setShouldAntialias(true)
@@ -1611,34 +1589,34 @@ open class MahaEditImageViewController: UIViewController {
             }
         }
     }
-    
+
     private func changeFilter(_ filter: MahaFilter) {
         func adjustImage(_ image: UIImage) -> UIImage {
             guard tools.contains(.adjust), !currentAdjustStatus.allValueIsZero else {
                 return image
             }
-            
+
             return image.maha.adjust(
                 brightness: currentAdjustStatus.brightness,
                 contrast: currentAdjustStatus.contrast,
                 saturation: currentAdjustStatus.saturation
             ) ?? image
         }
-        
+
         currentFilter = filter
-        if let image = filterImages[currentFilter.name] {
+        if let image = cachedFilterImages[currentFilter.name] {
             editImage = adjustImage(image)
             editImageWithoutAdjust = image
         } else {
             let image = currentFilter.applier?(originalImage) ?? originalImage
             editImage = adjustImage(image)
             editImageWithoutAdjust = image
-            filterImages[currentFilter.name] = image
+            cachedFilterImages[currentFilter.name] = image
         }
-        
+
         if tools.contains(.mosaic) {
             generateNewMosaicImageLayer()
-            
+
             if mosaicPaths.isEmpty {
                 imageView.image = editImage
             } else {
@@ -1648,25 +1626,25 @@ open class MahaEditImageViewController: UIViewController {
             imageView.image = editImage
         }
     }
-    
+
     private func generateNewMosaicImageLayer() {
         mosaicImage = editImage.maha.mosaicImage()
-        
+
         mosaicImageLayer?.removeFromSuperlayer()
-        
+
         mosaicImageLayer = CALayer()
         mosaicImageLayer?.frame = imageView.bounds
         mosaicImageLayer?.contents = mosaicImage?.cgImage
         imageView.layer.insertSublayer(mosaicImageLayer!, below: mosaicImageLayerMaskLayer)
-        
+
         mosaicImageLayer?.mask = mosaicImageLayerMaskLayer
     }
-    
+
     /// 传入inputImage 和 inputMosaicImage则代表仅想要获取新生成的mosaic图片
     @discardableResult
     private func generateNewMosaicImage(inputImage: UIImage? = nil, inputMosaicImage: UIImage? = nil) -> UIImage? {
         let renderRect = CGRect(origin: .zero, size: originalImage.size)
-        
+
         var midImage = UIGraphicsImageRenderer.maha.renderImage(size: originalImage.size) { format in
             format.scale = self.originalImage.scale
         } imageActions: { context in
@@ -1674,12 +1652,12 @@ open class MahaEditImageViewController: UIViewController {
                 inputImage?.draw(in: renderRect)
             } else {
                 var drawImage: UIImage?
-                if tools.contains(.filter), let image = filterImages[currentFilter.name] {
+                if tools.contains(.filter), let image = cachedFilterImages[currentFilter.name] {
                     drawImage = image
                 } else {
                     drawImage = originalImage
                 }
-                
+
                 if tools.contains(.adjust), !currentAdjustStatus.allValueIsZero {
                     drawImage = drawImage?.maha.adjust(
                         brightness: currentAdjustStatus.brightness,
@@ -1687,26 +1665,26 @@ open class MahaEditImageViewController: UIViewController {
                         saturation: currentAdjustStatus.saturation
                     )
                 }
-                
+
                 drawImage?.draw(in: renderRect)
             }
-            
+
             mosaicPaths.forEach { path in
-                context.move(to: path.startPoint)
+                context.move(to: path.scaledStartPoint)
                 path.linePoints.forEach { point in
                     context.addLine(to: point)
                 }
-                context.setLineWidth(path.path.lineWidth / path.ratio)
+                context.setLineWidth(path.path.lineWidth / path.pointScale)
                 context.setLineCap(.round)
                 context.setLineJoin(.round)
                 context.setBlendMode(.clear)
                 context.strokePath()
             }
         }
-        
+
         guard let midCgImage = midImage.cgImage else { return nil }
         midImage = UIImage(cgImage: midCgImage, scale: editImage.scale, orientation: .up)
-        
+
         let temp = UIGraphicsImageRenderer.maha.renderImage(size: originalImage.size) { format in
             format.scale = self.originalImage.scale
         } imageActions: { _ in
@@ -1715,28 +1693,28 @@ open class MahaEditImageViewController: UIViewController {
             (inputMosaicImage ?? mosaicImage)?.draw(in: renderRect)
             midImage.draw(in: renderRect)
         }
-        
+
         guard let cgi = temp.cgImage else { return nil }
         let image = UIImage(cgImage: cgi, scale: editImage.scale, orientation: .up)
-        
+
         if inputImage != nil {
             return image
         }
-        
+
         editImage = image
         imageView.image = image
         mosaicImageLayerMaskLayer?.path = nil
-        
+
         return image
     }
-    
+
     private func buildImage() -> UIImage {
         let image = UIGraphicsImageRenderer.maha.renderImage(size: editImage.size) { format in
             format.scale = self.editImage.scale
         } imageActions: { context in
             editImage.draw(at: .zero)
             drawingImageView.image?.draw(in: CGRect(origin: .zero, size: originalImage.size))
-            
+
             if !stickersContainer.subviews.isEmpty {
                 let scale = imageSize.width / stickersContainer.frame.width
                 stickersContainer.subviews.forEach { view in
@@ -1747,13 +1725,13 @@ open class MahaEditImageViewController: UIViewController {
                 context.concatenate(CGAffineTransform(scaleX: 1 / scale, y: 1 / scale))
             }
         }
-        
+
         guard let cgi = image.cgImage else {
             return editImage
         }
         return UIImage(cgImage: cgi, scale: editImage.scale, orientation: .up)
     }
-    
+
     func finishClipDismissAnimate() {
         mainScrollView.alpha = 1
         UIView.animate(withDuration: 0.1) {
@@ -1768,7 +1746,7 @@ open class MahaEditImageViewController: UIViewController {
 
 extension MahaEditImageViewController: UIGestureRecognizerDelegate {
     public func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-        guard imageStickerContainerIsHidden else {
+        guard isImageStickerContainerHidden else {
             return false
         }
         if gestureRecognizer is UITapGestureRecognizer {
@@ -1787,12 +1765,12 @@ extension MahaEditImageViewController: UIGestureRecognizerDelegate {
                 return true
             }
         } else if gestureRecognizer is UIPanGestureRecognizer {
-            guard let selectedTool = selectedTool else {
+            guard let activeTool = activeTool else {
                 return false
             }
-            return (selectedTool == .draw || selectedTool == .mosaic) && !isScrolling
+            return (activeTool == .draw || activeTool == .mosaic) && !isScrolling
         }
-        
+
         return true
     }
 }
@@ -1803,38 +1781,38 @@ extension MahaEditImageViewController: UIScrollViewDelegate {
     public func viewForZooming(in scrollView: UIScrollView) -> UIView? {
         return containerView
     }
-    
+
     public func scrollViewDidZoom(_ scrollView: UIScrollView) {
         let offsetX = (scrollView.frame.width > scrollView.contentSize.width) ? (scrollView.frame.width - scrollView.contentSize.width) * 0.5 : 0
         let offsetY = (scrollView.frame.height > scrollView.contentSize.height) ? (scrollView.frame.height - scrollView.contentSize.height) * 0.5 : 0
         containerView.center = CGPoint(x: scrollView.contentSize.width * 0.5 + offsetX, y: scrollView.contentSize.height * 0.5 + offsetY)
     }
-    
+
     public func scrollViewDidEndZooming(_ scrollView: UIScrollView, with view: UIView?, atScale scale: CGFloat) {
         isScrolling = false
     }
-    
+
     public func scrollViewDidScroll(_ scrollView: UIScrollView) {
         guard scrollView == mainScrollView else {
             return
         }
         isScrolling = true
     }
-    
+
     public func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
         guard scrollView == mainScrollView else {
             return
         }
         isScrolling = decelerate
     }
-    
+
     public func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
         guard scrollView == mainScrollView else {
             return
         }
         isScrolling = false
     }
-    
+
     public func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
         guard scrollView == mainScrollView else {
             return
@@ -1852,25 +1830,25 @@ extension MahaEditImageViewController: UICollectionViewDataSource, UICollectionV
         } else if collectionView == drawColorCollectionView {
             return drawColors.count
         } else if collectionView == filterCollectionView {
-            return thumbnailFilterImages.count
+            return filterPreviewImages.count
         } else {
             return adjustTools.count
         }
     }
-    
+
     public func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         if collectionView == editToolCollectionView {
             let cell = collectionView.dequeueReusableCell(withReuseIdentifier: MahaEditToolCell.maha.identifier, for: indexPath) as! MahaEditToolCell
-            
+
             let toolType = tools[indexPath.row]
             cell.icon.isHighlighted = false
-            cell.toolType = toolType
-            cell.icon.isHighlighted = toolType == selectedTool
-            
+            cell.tool = toolType
+            cell.icon.isHighlighted = toolType == activeTool
+
             return cell
         } else if collectionView == drawColorCollectionView {
             let cell = collectionView.dequeueReusableCell(withReuseIdentifier: MahaDrawColorCell.maha.identifier, for: indexPath) as! MahaDrawColorCell
-            
+
             let c = drawColors[indexPath.row]
             cell.color = c
             if c == currentDrawColor, !eraserBtn.isSelected {
@@ -1878,44 +1856,44 @@ extension MahaEditImageViewController: UICollectionViewDataSource, UICollectionV
             } else {
                 cell.bgWhiteView.layer.transform = CATransform3DIdentity
             }
-            
+
             return cell
         } else if collectionView == filterCollectionView {
             let cell = collectionView.dequeueReusableCell(withReuseIdentifier: MahaFilterImageCell.maha.identifier, for: indexPath) as! MahaFilterImageCell
-            
-            let image = thumbnailFilterImages[indexPath.row]
+
+            let image = filterPreviewImages[indexPath.row]
             let filter = MahaPhotoConfiguration.default().editImageConfiguration.filters[indexPath.row]
-            
+
             cell.nameLabel.text = filter.name
             cell.imageView.image = image
-            
+
             if currentFilter === filter {
                 cell.nameLabel.textColor = .maha.imageEditorToolTitleTintColor
             } else {
                 cell.nameLabel.textColor = .maha.imageEditorToolTitleNormalColor
             }
-            
+
             return cell
         } else {
             let cell = collectionView.dequeueReusableCell(withReuseIdentifier: MahaAdjustToolCell.maha.identifier, for: indexPath) as! MahaAdjustToolCell
-            
+
             let tool = adjustTools[indexPath.row]
-            
+
             cell.imageView.isHighlighted = false
-            cell.adjustTool = tool
-            let isSelected = tool == selectedAdjustTool
+            cell.tool = tool
+            let isSelected = tool == activeAdjustTool
             cell.imageView.isHighlighted = isSelected
-            
+
             if isSelected {
                 cell.nameLabel.textColor = .maha.imageEditorToolTitleTintColor
             } else {
                 cell.nameLabel.textColor = .maha.imageEditorToolTitleNormalColor
             }
-            
+
             return cell
         }
     }
-    
+
     public func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         if collectionView == editToolCollectionView {
             let toolType = tools[indexPath.row]
@@ -1937,15 +1915,15 @@ extension MahaEditImageViewController: UICollectionViewDataSource, UICollectionV
             }
         } else if collectionView == drawColorCollectionView {
             currentDrawColor = drawColors[indexPath.row]
-            switchEraserBtnStatus(false, reloadData: false)
+            updateEraserButtonSelection(false, reloadData: false)
         } else if collectionView == filterCollectionView {
             let filter = MahaPhotoConfiguration.default().editImageConfiguration.filters[indexPath.row]
             editorManager.storeAction(.filter(oldFilter: currentFilter, newFilter: filter))
             changeFilter(filter)
         } else {
             let tool = adjustTools[indexPath.row]
-            if tool != selectedAdjustTool {
-                changeAdjustTool(tool)
+            if tool != activeAdjustTool {
+                updateSelectedAdjustTool(tool)
             }
         }
         collectionView.scrollToItem(at: indexPath, at: .centeredHorizontally, animated: true)
@@ -1959,8 +1937,8 @@ extension MahaEditImageViewController: MahaStickerViewDelegate {
     func stickerBeginOperation(_ sticker: MahaBaseStickerView) {
         stickersContainer.bringSubviewToFront(sticker)
         preStickerState = sticker.state
-        
-        setToolView(show: false)
+
+        setToolViewsVisible(false)
         ashbinView.layer.removeAllAnimations()
         ashbinView.isHidden = false
         var frame = ashbinView.frame
@@ -1971,17 +1949,17 @@ extension MahaEditImageViewController: MahaStickerViewDelegate {
         UIView.animate(withDuration: 0.25) {
             self.ashbinView.frame = frame
         }
-        
+
         stickersContainer.subviews.forEach { view in
             if view !== sticker {
                 (view as? MahaStickerViewAdditional)?.resetState()
-                (view as? MahaStickerViewAdditional)?.gesIsEnabled = false
+                (view as? MahaStickerViewAdditional)?.isGestureEnabled = false
             }
         }
     }
-    
-    func stickerOnOperation(_ sticker: MahaBaseStickerView, panGes: UIPanGestureRecognizer) {
-        let point = panGes.location(in: view)
+
+    func stickerOnOperation(_ sticker: MahaBaseStickerView, panGesture: UIPanGestureRecognizer) {
+        let point = panGesture.location(in: view)
         if ashbinView.frame.contains(point) {
             ashbinView.backgroundColor = .maha.trashCanBackgroundTintColor
             ashbinImgView.isHighlighted = true
@@ -2002,28 +1980,28 @@ extension MahaEditImageViewController: MahaStickerViewDelegate {
             }
         }
     }
-    
-    func stickerEndOperation(_ sticker: MahaBaseStickerView, panGes: UIPanGestureRecognizer) {
-        setToolView(show: true)
+
+    func stickerEndOperation(_ sticker: MahaBaseStickerView, panGesture: UIPanGestureRecognizer) {
+        setToolViewsVisible(true)
         ashbinView.layer.removeAllAnimations()
         ashbinView.isHidden = true
-        
+
         var endState: MahaBaseStickertState? = sticker.state
-        
-        let point = panGes.location(in: view)
+
+        let point = panGesture.location(in: view)
         if ashbinView.frame.contains(point) {
             sticker.moveToAshbin()
             endState = nil
         }
-        
+
         editorManager.storeAction(.sticker(oldState: preStickerState, newState: endState))
         preStickerState = nil
-        
+
         stickersContainer.subviews.forEach { view in
-            (view as? MahaStickerViewAdditional)?.gesIsEnabled = true
+            (view as? MahaStickerViewAdditional)?.isGestureEnabled = true
         }
     }
-    
+
     func stickerDidTap(_ sticker: MahaBaseStickerView) {
         stickersContainer.bringSubviewToFront(sticker)
         stickersContainer.subviews.forEach { view in
@@ -2032,14 +2010,14 @@ extension MahaEditImageViewController: MahaStickerViewDelegate {
             }
         }
     }
-    
+
     func sticker(_ textSticker: MahaTextStickerView, editText text: String) {
         showInputTextVC(text, textColor: textSticker.textColor, font: textSticker.font, style: textSticker.style) { text, textColor, font, image, style in
             guard let image = image, !text.isEmpty else {
                 textSticker.moveToAshbin()
                 return
             }
-            
+
             textSticker.startTimer()
             guard textSticker.text != text || textSticker.textColor != textColor || textSticker.style != style else {
                 return
@@ -2062,7 +2040,7 @@ extension MahaEditImageViewController: MahaEditorManagerDelegate {
         undoBtn.isEnabled = !actions.isEmpty
         redoBtn.isEnabled = actions.count != redoActions.count
     }
-    
+
     func editorManager(_ manager: MahaEditorManager, undoAction action: MahaEditorAction) {
         switch action {
         case let .draw(path):
@@ -2081,7 +2059,7 @@ extension MahaEditImageViewController: MahaEditorManagerDelegate {
             undoOrRedoAdjust(oldStatus)
         }
     }
-    
+
     func editorManager(_ manager: MahaEditorManager, redoAction action: MahaEditorAction) {
         switch action {
         case let .draw(path):
@@ -2100,88 +2078,88 @@ extension MahaEditImageViewController: MahaEditorManagerDelegate {
             undoOrRedoAdjust(newStatus)
         }
     }
-    
+
     private func undoDraw(_ path: MahaDrawPath) {
         drawPaths.removeLast()
         drawLine()
     }
-    
+
     private func redoDraw(_ path: MahaDrawPath) {
         drawPaths.append(path)
         drawLine()
     }
-    
+
     private func undoEraser(_ paths: [MahaDrawPath]) {
-        paths.forEach { $0.willDelete = false }
+        paths.forEach { $0.isPendingDeletion = false }
         drawPaths.append(contentsOf: paths)
         drawPaths = drawPaths.sorted { $0.index < $1.index }
         drawLine()
     }
-    
+
     private func redoEraser(_ paths: [MahaDrawPath]) {
         drawPaths.removeAll { paths.contains($0) }
         drawLine()
     }
-    
+
     private func undoOrRedoClip(_ status: MahaClipStatus) {
         clipImage(status: status)
         preClipStatus = status
     }
-    
+
     private func undoMosaic(_ path: MahaMosaicPath) {
         mosaicPaths.removeLast()
         generateNewMosaicImage()
     }
-    
+
     private func redoMosaic(_ path: MahaMosaicPath) {
         mosaicPaths.append(path)
         generateNewMosaicImage()
     }
-    
+
     private func undoSticker(_ oldState: MahaBaseStickertState?, _ newState: MahaBaseStickertState?) {
         guard let oldState else {
             removeSticker(id: newState?.id)
             return
         }
-        
+
         removeSticker(id: oldState.id)
         if let sticker = MahaBaseStickerView.initWithState(oldState) {
             addSticker(sticker)
         }
     }
-    
+
     private func redoSticker(_ oldState: MahaBaseStickertState?, _ newState: MahaBaseStickertState?) {
         guard let newState else {
             removeSticker(id: oldState?.id)
             return
         }
-        
+
         removeSticker(id: newState.id)
         if let sticker = MahaBaseStickerView.initWithState(newState) {
             addSticker(sticker)
         }
     }
-    
+
     private func undoOrRedoFilter(_ filter: MahaFilter?) {
         guard let filter else { return }
         changeFilter(filter)
-        
+
         let filters = MahaPhotoConfiguration.default().editImageConfiguration.filters
-        
+
         guard let filterCollectionView,
               let index = filters.firstIndex(where: { $0.name == filter.name }) else {
             return
         }
-        
+
         let indexPath = IndexPath(row: index, section: 0)
         filterCollectionView.selectItem(at: indexPath, animated: false, scrollPosition: .centeredHorizontally)
         filterCollectionView.scrollToItem(at: indexPath, at: .centeredHorizontally, animated: true)
         filterCollectionView.reloadData()
     }
-    
+
     private func undoOrRedoAdjust(_ status: MahaAdjustStatus) {
         var adjustTool: MahaEditImageConfiguration.AdjustTool?
-        
+
         if currentAdjustStatus.brightness != status.brightness {
             adjustTool = .brightness
         } else if currentAdjustStatus.contrast != status.contrast {
@@ -2189,20 +2167,20 @@ extension MahaEditImageViewController: MahaEditorManagerDelegate {
         } else if currentAdjustStatus.saturation != status.saturation {
             adjustTool = .saturation
         }
-        
+
         currentAdjustStatus = status
         preAdjustStatus = status
         adjustStatusChanged()
-        
+
         guard let adjustTool else { return }
-        
-        changeAdjustTool(adjustTool)
-        
+
+        updateSelectedAdjustTool(adjustTool)
+
         guard let adjustCollectionView,
               let index = adjustTools.firstIndex(where: { $0 == adjustTool }) else {
             return
         }
-        
+
         let indexPath = IndexPath(row: index, section: 0)
         adjustCollectionView.selectItem(at: indexPath, animated: true, scrollPosition: .centeredHorizontally)
         adjustCollectionView.scrollToItem(at: indexPath, at: .centeredHorizontally, animated: true)
@@ -2214,12 +2192,12 @@ extension MahaEditImageViewController: MahaEditorManagerDelegate {
 
 public class MahaPassThroughView: UIView {
     var findResponderSticker: ((CGPoint) -> UIView?)?
-    
+
     override public func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         guard bounds.contains(point) else {
             return super.hitTest(point, with: event)
         }
-        
+
         for view in subviews.reversed() {
             let point = convert(point, to: view)
             if !view.isHidden,
@@ -2228,11 +2206,11 @@ public class MahaPassThroughView: UIView {
                 return view.hitTest(point, with: event)
             }
         }
-        
+
         if let sticker = findResponderSticker?(convert(point, to: superview)) {
             return sticker.hitTest(point, with: event)
         }
-        
+
         return super.hitTest(point, with: event)
     }
 }

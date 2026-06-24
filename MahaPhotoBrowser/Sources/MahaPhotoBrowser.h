@@ -33,4 +33,5 @@ FOUNDATION_EXPORT double MahaPhotoBrowserVersionNumber;
 //! Project version string for MahaPhotoBrowser.
 FOUNDATION_EXPORT const unsigned char MahaPhotoBrowserVersionString[];
 
-// In this header, you should import all the public headers of your framework using statements like #import <MahaPhotoBrowser/PublicHeader.h>
+// Import additional public headers here as needed, for example:
+// #import <MahaPhotoBrowser/PublicHeader.h>

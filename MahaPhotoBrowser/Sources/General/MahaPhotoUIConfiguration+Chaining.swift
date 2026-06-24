@@ -30,32 +30,32 @@ import UIKit
 
 public extension MahaPhotoUIConfiguration {
     @discardableResult
-    func sortAscending(_ ascending: Bool) -> MahaPhotoUIConfiguration {
-        sortAscending = ascending
+    func sortAscending(_ isAscending: Bool) -> MahaPhotoUIConfiguration {
+        sortAscending = isAscending
         return self
     }
     
     @discardableResult
-    func style(_ style: MahaPhotoBrowserStyle) -> MahaPhotoUIConfiguration {
-        self.style = style
+    func style(_ browserStyle: MahaPhotoBrowserStyle) -> MahaPhotoUIConfiguration {
+        style = browserStyle
         return self
     }
     
     @discardableResult
-    func statusBarStyle(_ statusBarStyle: UIStatusBarStyle) -> MahaPhotoUIConfiguration {
-        self.statusBarStyle = statusBarStyle
+    func statusBarStyle(_ preferredStyle: UIStatusBarStyle) -> MahaPhotoUIConfiguration {
+        statusBarStyle = preferredStyle
         return self
     }
     
     @discardableResult
-    func navCancelButtonStyle(_ style: MahaPhotoUIConfiguration.CancelButtonStyle) -> MahaPhotoUIConfiguration {
-        navCancelButtonStyle = style
+    func navCancelButtonStyle(_ cancelButtonStyle: MahaPhotoUIConfiguration.CancelButtonStyle) -> MahaPhotoUIConfiguration {
+        navCancelButtonStyle = cancelButtonStyle
         return self
     }
     
     @discardableResult
-    func showStatusBarInPreviewInterface(_ value: Bool) -> MahaPhotoUIConfiguration {
-        showStatusBarInPreviewInterface = value
+    func showStatusBarInPreviewInterface(_ isVisible: Bool) -> MahaPhotoUIConfiguration {
+        showStatusBarInPreviewInterface = isVisible
         return self
     }
     

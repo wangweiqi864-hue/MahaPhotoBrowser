@@ -48,31 +48,30 @@ public class MahaPhotoModel: NSObject {
     
     public var isSelected = false
     
-    private var pri_dataSize: MahaPhotoConfiguration.KBUnit?
+    private var cachedDataSize: MahaPhotoConfiguration.KBUnit?
     
     public var dataSize: MahaPhotoConfiguration.KBUnit? {
-        if let pri_dataSize = pri_dataSize {
-            return pri_dataSize
+        if let cachedDataSize = cachedDataSize {
+            return cachedDataSize
         }
         
         let size = MahaPhotoManager.fetchAssetSize(for: asset)
-        pri_dataSize = size
+        cachedDataSize = size
         
         return size
     }
     
-    private var pri_editImage: UIImage?
+    private var editedImage: UIImage?
     
     public var editImage: UIImage? {
         set {
-            pri_editImage = newValue
+            editedImage = newValue
         }
         get {
-            if let _ = editImageModel {
-                return pri_editImage
-            } else {
+            guard editImageModel != nil else {
                 return nil
             }
+            return editedImage
         }
     }
     
@@ -90,13 +89,13 @@ public class MahaPhotoModel: NSObject {
     public var previewSize: CGSize {
         let scale: CGFloat = UIScreen.main.scale
         if whRatio > 1 {
-            let h = min(UIScreen.main.bounds.height, MahaMaxImageWidth) * scale
-            let w = h * whRatio
-            return CGSize(width: w, height: h)
+            let previewHeight = min(UIScreen.main.bounds.height, MahaMaxImageWidth) * scale
+            let previewWidth = previewHeight * whRatio
+            return CGSize(width: previewWidth, height: previewHeight)
         } else {
-            let w = min(UIScreen.main.bounds.width, MahaMaxImageWidth) * scale
-            let h = w / whRatio
-            return CGSize(width: w, height: h)
+            let previewWidth = min(UIScreen.main.bounds.width, MahaMaxImageWidth) * scale
+            let previewHeight = previewWidth / whRatio
+            return CGSize(width: previewWidth, height: previewHeight)
         }
     }
     
@@ -132,20 +131,20 @@ public class MahaPhotoModel: NSObject {
     }
     
     public func transformDuration(for asset: PHAsset) -> String {
-        let dur = Int(round(asset.duration))
+        let durationInSeconds = Int(round(asset.duration))
         
-        switch dur {
+        switch durationInSeconds {
         case 0..<60:
-            return String(format: "00:%02d", dur)
+            return String(format: "00:%02d", durationInSeconds)
         case 60..<3600:
-            let m = dur / 60
-            let s = dur % 60
-            return String(format: "%02d:%02d", m, s)
+            let minutes = durationInSeconds / 60
+            let seconds = durationInSeconds % 60
+            return String(format: "%02d:%02d", minutes, seconds)
         case 3600...:
-            let h = dur / 3600
-            let m = (dur % 3600) / 60
-            let s = dur % 60
-            return String(format: "%02d:%02d:%02d", h, m, s)
+            let hours = durationInSeconds / 3600
+            let minutes = (durationInSeconds % 3600) / 60
+            let seconds = durationInSeconds % 60
+            return String(format: "%02d:%02d:%02d", hours, minutes, seconds)
         default:
             return ""
         }

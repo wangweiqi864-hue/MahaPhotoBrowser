@@ -32,7 +32,7 @@ extension MahaPhotoBrowserWrapper where Base: PHPhotoLibrary {
         case readWrite
         
         @available(iOS 14.0, *)
-        var toPHLevel: PHAccessLevel {
+        var photoKitAccessLevel: PHAccessLevel {
             switch self {
             case .addOnly:
                 return .addOnly
@@ -44,7 +44,7 @@ extension MahaPhotoBrowserWrapper where Base: PHPhotoLibrary {
     
     static func authStatus(for level: MahaAccessLevel) -> PHAuthorizationStatus {
         if #available(iOS 14.0, *) {
-            return PHPhotoLibrary.authorizationStatus(for: level.toPHLevel)
+            return PHPhotoLibrary.authorizationStatus(for: level.photoKitAccessLevel)
         } else {
             return PHPhotoLibrary.authorizationStatus()
         }

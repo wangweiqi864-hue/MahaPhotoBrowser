@@ -113,7 +113,7 @@ extension MahaFilter {
             return image
         }
         
-        let backgroundImage = getColorImage(red: 127, green: 187, blue: 227, alpha: Int(255 * 0.2), rect: ciImage.extent)
+        let backgroundImage = makeColorImage(red: 127, green: 187, blue: 227, alpha: Int(255 * 0.2), rect: ciImage.extent)
         let outputCIImage = ciImage.applyingFilter("CIOverlayBlendMode", parameters: [
             "inputBackgroundImage": backgroundImage
         ])
@@ -133,11 +133,11 @@ extension MahaFilter {
             return image
         }
         
-        let backgroundImage = getColorImage(red: 247, green: 176, blue: 153, alpha: Int(255 * 0.56), rect: ciImage.extent)
-        let backgroundImage2 = getColorImage(red: 0, green: 70, blue: 150, alpha: Int(255 * 0.4), rect: ciImage.extent)
+        let overlayBackgroundImage = makeColorImage(red: 247, green: 176, blue: 153, alpha: Int(255 * 0.56), rect: ciImage.extent)
+        let highlightBackgroundImage = makeColorImage(red: 0, green: 70, blue: 150, alpha: Int(255 * 0.4), rect: ciImage.extent)
         let outputCIImage = ciImage
             .applyingFilter("CIDarkenBlendMode", parameters: [
-                "inputBackgroundImage": backgroundImage
+                "inputBackgroundImage": overlayBackgroundImage
             ])
             .applyingFilter("CISepiaTone", parameters: [
                 "inputIntensity": 0.2
@@ -148,7 +148,7 @@ extension MahaFilter {
                 "inputContrast": 1.1
             ])
             .applyingFilter("CILightenBlendMode", parameters: [
-                "inputBackgroundImage": backgroundImage2
+                "inputBackgroundImage": highlightBackgroundImage
             ])
         
         guard let outputImage = outputCIImage.maha.toUIImage() else {
@@ -162,8 +162,8 @@ extension MahaFilter {
             return image
         }
         
-        let filterImage = getColorImage(red: 243, green: 106, blue: 188, alpha: Int(255 * 0.1), rect: ciImage.extent)
-        let backgroundImage = ciImage
+        let overlayImage = makeColorImage(red: 243, green: 106, blue: 188, alpha: Int(255 * 0.1), rect: ciImage.extent)
+        let adjustedBackgroundImage = ciImage
             .applyingFilter("CIColorControls", parameters: [
                 "inputSaturation": 1.3,
                 "inputBrightness": 0.1,
@@ -173,9 +173,9 @@ extension MahaFilter {
                 "inputAngle": 0.3
             ])
         
-        let outputCIImage = filterImage
+        let outputCIImage = overlayImage
             .applyingFilter("CIScreenBlendMode", parameters: [
-                "inputBackgroundImage": backgroundImage
+                "inputBackgroundImage": adjustedBackgroundImage
             ])
             .applyingFilter("CIToneCurve", parameters: [
                 "inputPoint0": CIVector(x: 0, y: 0),
@@ -203,8 +203,8 @@ extension MahaFilter {
         let radius0 = min(width / 4.0, height / 4.0)
         let radius1 = min(width / 1.5, height / 1.5)
         
-        let color0 = getColor(red: 128, green: 78, blue: 15, alpha: 255)
-        let color1 = getColor(red: 79, green: 0, blue: 79, alpha: 255)
+        let color0 = makeColor(red: 128, green: 78, blue: 15, alpha: 255)
+        let color1 = makeColor(red: 79, green: 0, blue: 79, alpha: 255)
         let circle = CIFilter(name: "CIRadialGradient", parameters: [
             "inputCenter": CIVector(x: centerWidth, y: centerHeight),
             "inputRadius0": radius0,
@@ -229,7 +229,7 @@ extension MahaFilter {
         return outputImage
     }
     
-    class func getColor(red: Int, green: Int, blue: Int, alpha: Int = 255) -> CIColor {
+    class func makeColor(red: Int, green: Int, blue: Int, alpha: Int = 255) -> CIColor {
         return CIColor(
             red: CGFloat(Double(red) / 255.0),
             green: CGFloat(Double(green) / 255.0),
@@ -238,8 +238,8 @@ extension MahaFilter {
         )
     }
     
-    class func getColorImage(red: Int, green: Int, blue: Int, alpha: Int = 255, rect: CGRect) -> CIImage {
-        let color = getColor(red: red, green: green, blue: blue, alpha: alpha)
+    class func makeColorImage(red: Int, green: Int, blue: Int, alpha: Int = 255, rect: CGRect) -> CIImage {
+        let color = makeColor(red: red, green: green, blue: blue, alpha: alpha)
         return CIImage(color: color).cropped(to: rect)
     }
 }

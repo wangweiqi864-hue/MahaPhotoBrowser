@@ -35,14 +35,14 @@ public class MahaPhotoUIConfiguration: NSObject {
         case image
     }
     
-    private static var single = MahaPhotoUIConfiguration()
+    private static var sharedConfiguration = MahaPhotoUIConfiguration()
     
     public class func `default`() -> MahaPhotoUIConfiguration {
-        return MahaPhotoUIConfiguration.single
+        return MahaPhotoUIConfiguration.sharedConfiguration
     }
     
     public class func resetConfiguration() {
-        MahaPhotoUIConfiguration.single = MahaPhotoUIConfiguration()
+        MahaPhotoUIConfiguration.sharedConfiguration = MahaPhotoUIConfiguration()
     }
     
     // MARK: Framework style.
@@ -71,7 +71,7 @@ public class MahaPhotoUIConfiguration: NSObject {
     /// Custom alert class. Defaults to nil.
     public var customAlertClass: MahaCustomAlertProtocol.Type?
     
-    private var pri_columnCount = 4
+    private var configuredColumnCount = 4
     /// The column count when iPhone is in portait mode. Minimum is 2, maximum is 6. Defaults to 4.
     /// ```
     /// iPhone landscape mode: columnCount += 2.
@@ -82,10 +82,10 @@ public class MahaPhotoUIConfiguration: NSObject {
     /// - Note: This property is ignored when using columnCountBlock.
     public var columnCount: Int {
         get {
-            pri_columnCount
+            configuredColumnCount
         }
         set {
-            pri_columnCount = min(6, max(newValue, 2))
+            configuredColumnCount = min(6, max(newValue, 2))
         }
     }
     
@@ -248,15 +248,15 @@ public class MahaPhotoUIConfiguration: NSObject {
     /// 预览快速选择模式下，按钮标题颜色
     public var sheetBtnTitleColor: UIColor = .black
     
-    private var pri_sheetBtnTitleTintColor: UIColor?
+    private var sheetButtonTitleTintColorOverride: UIColor?
     /// Preview selection mode, cancel button title color when the selection amount is superior than 0.
     /// 预览快速选择模式下，按钮标题高亮颜色
     public var sheetBtnTitleTintColor: UIColor {
         get {
-            pri_sheetBtnTitleTintColor ?? themeColor
+            sheetButtonTitleTintColorOverride ?? themeColor
         }
         set {
-            pri_sheetBtnTitleTintColor = newValue
+            sheetButtonTitleTintColorOverride = newValue
         }
     }
     

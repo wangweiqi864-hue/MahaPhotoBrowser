@@ -28,11 +28,20 @@ import UIKit
 
 class MahaNoAuthTipsView: UIView {
     private enum Layout {
+        static let horizontalInset: CGFloat = 20
+        static let titleTopDivisor: CGFloat = 4.6
+        static let titleDescriptionSpacing: CGFloat = 18
+        static let buttonBottomInset: CGFloat = 40
+        static let buttonMinimumWidth: CGFloat = 200
+        static let buttonExpandedHorizontalInset: CGFloat = 30
+        static let buttonMaximumWidth: CGFloat = 280
+        static let buttonHeight: CGFloat = 50
+        static let buttonTextMaximumWidth: CGFloat = 250
         static let titleFont = UIFont.maha.font(ofSize: 24, bold: true)
         static let descFont = UIFont.maha.font(ofSize: 17)
         static let btnFont = UIFont.maha.font(ofSize: 17, bold: true)
     }
-    
+
     private lazy var titleLabel: UILabel = {
         let label = UILabel()
         label.text = localLanguageTextValue(.noLibraryAuthTitleInThumbList)
@@ -43,7 +52,7 @@ class MahaNoAuthTipsView: UIView {
         label.font = Layout.titleFont
         return label
     }()
-    
+
     private lazy var descLabel: UILabel = {
         let label = UILabel()
         label.text = localLanguageTextValue(.noLibraryAuthDescInThumbList)
@@ -55,7 +64,7 @@ class MahaNoAuthTipsView: UIView {
         label.font = Layout.descFont
         return label
     }()
-    
+
     private lazy var gotoSettingControl: UIControl = {
         let control = UIControl()
         control.maha.setCornerRadius(6)
@@ -63,7 +72,7 @@ class MahaNoAuthTipsView: UIView {
         control.addTarget(self, action: #selector(gotoSetting), for: .touchUpInside)
         return control
     }()
-    
+
     private lazy var gotoSettingLabel: UILabel = {
         let label = UILabel()
         label.text = localLanguageTextValue(.gotoSystemSettingInThumbList)
@@ -74,105 +83,113 @@ class MahaNoAuthTipsView: UIView {
         label.textAlignment = .center
         return label
     }()
-    
+
     override init(frame: CGRect) {
         super.init(frame: frame)
-        
+
         setupUI()
     }
-    
+
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-    
+
     override func layoutSubviews() {
         super.layoutSubviews()
-        
-        var insets = UIEdgeInsets(top: 20, left: 0, bottom: 0, right: 0)
-        if #available(iOS 11.0, *), deviceIsFringeScreen() {
-            insets = safeAreaInsets
-        }
-        let totalLRInset = insets.left + insets.right
-        
-        let titleY = maha.height / 4.6
+
+        let layoutInsets = resolvedLayoutInsets()
+        let totalHorizontalSafeAreaInset = layoutInsets.left + layoutInsets.right
+        let contentWidth = maha.width - Layout.horizontalInset * 2 - totalHorizontalSafeAreaInset
+        let contentOriginX = Layout.horizontalInset + totalHorizontalSafeAreaInset / 2
+
+        let titleY = maha.height / Layout.titleTopDivisor
         let titleH = ceil(
             (titleLabel.text ?? "").maha.boundingRect(
                 font: Layout.titleFont,
-                limitSize: CGSize(width: maha.width - 40 - totalLRInset, height: .greatestFiniteMagnitude),
+                limitSize: CGSize(width: contentWidth, height: .greatestFiniteMagnitude),
                 lineBreakMode: .byWordWrapping
             ).height
         )
-        titleLabel.frame = CGRect(x: 20 + totalLRInset / 2, y: titleY, width: maha.width - 40 - totalLRInset, height: titleH)
-        
-        let descY = titleLabel.maha.bottom + 18
+        titleLabel.frame = CGRect(x: contentOriginX, y: titleY, width: contentWidth, height: titleH)
+
+        let descY = titleLabel.maha.bottom + Layout.titleDescriptionSpacing
         let descH = ceil(
             (descLabel.text ?? "").maha.boundingRect(
                 font: Layout.descFont,
-                limitSize: CGSize(width: maha.width - 40 - totalLRInset, height: .greatestFiniteMagnitude),
+                limitSize: CGSize(width: contentWidth, height: .greatestFiniteMagnitude),
                 lineBreakMode: .byWordWrapping
             ).height
         )
-        descLabel.frame = CGRect(x: 20 + totalLRInset / 2, y: descY, width: maha.width - 40 - totalLRInset, height: descH)
-        
-        var controlSize = CGSize.zero
+        descLabel.frame = CGRect(x: contentOriginX, y: descY, width: contentWidth, height: descH)
+
         let settingLabelSize = (gotoSettingLabel.text ?? "").maha.boundingRect(
             font: Layout.btnFont,
             limitSize: CGSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude),
             lineBreakMode: .byWordWrapping
         )
-        
-        let maxSettingLabelW: CGFloat = 250
-        
-        if settingLabelSize.width <= 170 {
-            controlSize.width = 200
-        } else if (171...maxSettingLabelW) ~= settingLabelSize.width {
-            controlSize.width = settingLabelSize.width + 30
-        } else {
-            controlSize.width = 280
-        }
-        
-        let settingLabelHeight = ceil(
-            (gotoSettingLabel.text ?? "").maha.boundingRect(
-                font: Layout.btnFont,
-                limitSize: CGSize(width: min(settingLabelSize.width, maxSettingLabelW), height: CGFloat.greatestFiniteMagnitude),
-                lineBreakMode: .byWordWrapping
-            ).height
-        )
-        
-        if settingLabelHeight > ceil(Layout.btnFont.lineHeight) {
-            controlSize.height = max(settingLabelHeight + 30, 50)
-        } else {
-            controlSize.height = 50
-        }
-        
+        let controlSize = calculateSettingControlSize(for: settingLabelSize)
+        let labelWidth = min(Layout.buttonTextMaximumWidth, settingLabelSize.width)
+
         gotoSettingControl.frame = CGRect(
             x: maha.centerX - controlSize.width / 2,
-            y: maha.height - controlSize.height - 40,
+            y: maha.height - controlSize.height - Layout.buttonBottomInset,
             width: controlSize.width,
             height: controlSize.height
         )
-        
+
         gotoSettingLabel.frame = CGRect(
-            x: (controlSize.width - min(maxSettingLabelW, settingLabelSize.width)) / 2,
+            x: (controlSize.width - labelWidth) / 2,
             y: 0,
-            width: min(maxSettingLabelW, settingLabelSize.width),
+            width: labelWidth,
             height: controlSize.height
         )
     }
-    
+
+    private func resolvedLayoutInsets() -> UIEdgeInsets {
+        if #available(iOS 11.0, *), deviceIsFringeScreen() {
+            return safeAreaInsets
+        }
+        return UIEdgeInsets(top: 20, left: 0, bottom: 0, right: 0)
+    }
+
+    private func calculateSettingControlSize(for labelSize: CGSize) -> CGSize {
+        let labelWidth = min(labelSize.width, Layout.buttonTextMaximumWidth)
+        let buttonWidth: CGFloat
+        if labelSize.width <= 170 {
+            buttonWidth = Layout.buttonMinimumWidth
+        } else if labelSize.width <= Layout.buttonTextMaximumWidth {
+            buttonWidth = labelSize.width + Layout.buttonExpandedHorizontalInset
+        } else {
+            buttonWidth = Layout.buttonMaximumWidth
+        }
+
+        let labelHeight = ceil(
+            (gotoSettingLabel.text ?? "").maha.boundingRect(
+                font: Layout.btnFont,
+                limitSize: CGSize(width: labelWidth, height: CGFloat.greatestFiniteMagnitude),
+                lineBreakMode: .byWordWrapping
+            ).height
+        )
+        let buttonHeight = labelHeight > ceil(Layout.btnFont.lineHeight)
+            ? max(labelHeight + Layout.buttonExpandedHorizontalInset, Layout.buttonHeight)
+            : Layout.buttonHeight
+
+        return CGSize(width: buttonWidth, height: buttonHeight)
+    }
+
     private func setupUI() {
         addSubview(titleLabel)
         addSubview(descLabel)
         addSubview(gotoSettingControl)
         gotoSettingControl.addSubview(gotoSettingLabel)
     }
-    
+
     @objc private func gotoSetting() {
         guard let url = URL(string: UIApplication.openSettingsURLString),
               UIApplication.shared.canOpenURL(url) else {
             return
         }
-        
+
         UIApplication.shared.open(url, options: [:], completionHandler: nil)
     }
 }

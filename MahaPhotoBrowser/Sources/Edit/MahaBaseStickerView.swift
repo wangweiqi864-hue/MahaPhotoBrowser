@@ -29,26 +29,26 @@ import UIKit
 protocol MahaStickerViewDelegate: NSObject {
     /// Called when scale or rotate or move.
     func stickerBeginOperation(_ sticker: MahaBaseStickerView)
-    
+
     /// Called during scale or rotate or move.
-    func stickerOnOperation(_ sticker: MahaBaseStickerView, panGes: UIPanGestureRecognizer)
-    
+    func stickerOnOperation(_ sticker: MahaBaseStickerView, panGesture: UIPanGestureRecognizer)
+
     /// Called after scale or rotate or move.
-    func stickerEndOperation(_ sticker: MahaBaseStickerView, panGes: UIPanGestureRecognizer)
-    
+    func stickerEndOperation(_ sticker: MahaBaseStickerView, panGesture: UIPanGestureRecognizer)
+
     /// Called when tap sticker.
     func stickerDidTap(_ sticker: MahaBaseStickerView)
-    
+
     func sticker(_ textSticker: MahaTextStickerView, editText text: String)
 }
 
 protocol MahaStickerViewAdditional: NSObject {
-    var gesIsEnabled: Bool { get set }
-    
+    var isGestureEnabled: Bool { get set }
+
     func resetState()
-    
+
     func moveToAshbin()
-    
+
     func addScale(_ scale: CGFloat)
 }
 
@@ -59,65 +59,65 @@ class MahaBaseStickerView: UIView, UIGestureRecognizerDelegate {
         case bottom = 180
         case left = 270
     }
-    
+
     var id: String
-    
+
     var borderWidth = 1 / UIScreen.main.scale
-    
-    var firstLayout = true
-    
+
+    var needsInitialLayout = true
+
     let originScale: CGFloat
-    
+
     let originAngle: CGFloat
-    
-    var maxGesScale: CGFloat
-    
+
+    var maximumGestureScale: CGFloat
+
     var originTransform: CGAffineTransform = .identity
-    
-    var timer: Timer?
-    
-    var totalTranslationPoint: CGPoint = .zero
-    
-    var gesTranslationPoint: CGPoint = .zero
-    
-    var gesRotation: CGFloat = 0
-    
-    var gesScale: CGFloat = 1
-    
-    var onOperation = false
-    
-    var gesIsEnabled = true
-    
+
+    var borderHideTimer: Timer?
+
+    var totalTranslation: CGPoint = .zero
+
+    var currentGestureTranslation: CGPoint = .zero
+
+    var currentGestureRotation: CGFloat = 0
+
+    var currentGestureScale: CGFloat = 1
+
+    var isOperating = false
+
+    var isGestureEnabled = true
+
     var originFrame: CGRect
-    
-    lazy var tapGes = UITapGestureRecognizer(target: self, action: #selector(tapAction(_:)))
-    
-    lazy var pinchGes: UIPinchGestureRecognizer = {
+
+    lazy var tapGesture = UITapGestureRecognizer(target: self, action: #selector(tapAction(_:)))
+
+    lazy var pinchGesture: UIPinchGestureRecognizer = {
         let pinch = UIPinchGestureRecognizer(target: self, action: #selector(pinchAction(_:)))
         pinch.delegate = self
         return pinch
     }()
-    
-    lazy var panGes: UIPanGestureRecognizer = {
+
+    lazy var panGesture: UIPanGestureRecognizer = {
         let pan = UIPanGestureRecognizer(target: self, action: #selector(panAction(_:)))
         pan.delegate = self
         return pan
     }()
-    
+
     var state: MahaBaseStickertState {
         fatalError()
     }
-    
+
     var borderView: UIView {
         return self
     }
-    
+
     weak var delegate: MahaStickerViewDelegate?
-    
+
     deinit {
         cleanTimer()
     }
-    
+
     class func initWithState(_ state: MahaBaseStickertState) -> MahaBaseStickerView? {
         if let state = state as? MahaTextStickerState {
             return MahaTextStickerView(state: state)
@@ -127,7 +127,7 @@ class MahaBaseStickerView: UIView, UIGestureRecognizerDelegate {
             return nil
         }
     }
-    
+
     init(
         id: String = UUID().uuidString,
         originScale: CGFloat,
@@ -142,100 +142,100 @@ class MahaBaseStickerView: UIView, UIGestureRecognizerDelegate {
         self.originScale = originScale
         self.originAngle = originAngle
         self.originFrame = originFrame
-        maxGesScale = 4 / originScale
+        maximumGestureScale = 4 / originScale
         super.init(frame: .zero)
-        
-        self.gesScale = gesScale
-        self.gesRotation = gesRotation
-        self.totalTranslationPoint = totalTranslationPoint
-        
+
+        currentGestureScale = gesScale
+        currentGestureRotation = gesRotation
+        totalTranslation = totalTranslationPoint
+
         borderView.layer.borderWidth = borderWidth
         hideBorder()
         if showBorder {
             startTimer()
         }
-        
-        addGestureRecognizer(tapGes)
-        addGestureRecognizer(pinchGes)
-        
+
+        addGestureRecognizer(tapGesture)
+        addGestureRecognizer(pinchGesture)
+
         let rotationGes = UIRotationGestureRecognizer(target: self, action: #selector(rotationAction(_:)))
         rotationGes.delegate = self
         addGestureRecognizer(rotationGes)
-        
-        addGestureRecognizer(panGes)
-        tapGes.require(toFail: panGes)
+
+        addGestureRecognizer(panGesture)
+        tapGesture.require(toFail: panGesture)
     }
-    
+
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-    
+
     override func layoutSubviews() {
         super.layoutSubviews()
-        
-        guard firstLayout else {
+
+        guard needsInitialLayout else {
             return
         }
-        
+
         // Rotate must be first when first layout.
         transform = transform.rotated(by: originAngle.maha.toPi)
-        
-        if totalTranslationPoint != .zero {
+
+        if totalTranslation != .zero {
             let direction = direction(for: originAngle)
             if direction == .right {
-                transform = transform.translatedBy(x: totalTranslationPoint.y, y: -totalTranslationPoint.x)
+                transform = transform.translatedBy(x: totalTranslation.y, y: -totalTranslation.x)
             } else if direction == .bottom {
-                transform = transform.translatedBy(x: -totalTranslationPoint.x, y: -totalTranslationPoint.y)
+                transform = transform.translatedBy(x: -totalTranslation.x, y: -totalTranslation.y)
             } else if direction == .left {
-                transform = transform.translatedBy(x: -totalTranslationPoint.y, y: totalTranslationPoint.x)
+                transform = transform.translatedBy(x: -totalTranslation.y, y: totalTranslation.x)
             } else {
-                transform = transform.translatedBy(x: totalTranslationPoint.x, y: totalTranslationPoint.y)
+                transform = transform.translatedBy(x: totalTranslation.x, y: totalTranslation.y)
             }
         }
-        
+
         transform = transform.scaledBy(x: originScale, y: originScale)
-        
+
         originTransform = transform
-        
-        if gesScale != 1 {
-            transform = transform.scaledBy(x: gesScale, y: gesScale)
+
+        if currentGestureScale != 1 {
+            transform = transform.scaledBy(x: currentGestureScale, y: currentGestureScale)
         }
-        if gesRotation != 0 {
-            transform = transform.rotated(by: gesRotation)
+        if currentGestureRotation != 0 {
+            transform = transform.rotated(by: currentGestureRotation)
         }
-        
-        firstLayout = false
+
+        needsInitialLayout = false
         setupUIFrameWhenFirstLayout()
     }
-    
+
     func setupUIFrameWhenFirstLayout() {}
-    
+
     private func direction(for angle: CGFloat) -> MahaBaseStickerView.Direction {
         // 将角度转换为0~360，并对360取余
         let angle = ((Int(angle) % 360) + 360) % 360
         return MahaBaseStickerView.Direction(rawValue: angle) ?? .up
     }
-    
+
     @objc func tapAction(_ ges: UITapGestureRecognizer) {
-        guard gesIsEnabled else { return }
-        
+        guard isGestureEnabled else { return }
+
         delegate?.stickerDidTap(self)
         startTimer()
     }
-    
+
     @objc func pinchAction(_ ges: UIPinchGestureRecognizer) {
-        guard gesIsEnabled else { return }
-        
-        let scale = min(maxGesScale, gesScale * ges.scale)
+        guard isGestureEnabled else { return }
+
+        let scale = min(maximumGestureScale, currentGestureScale * ges.scale)
         ges.scale = 1
-        
+
         var scaleChanged = false
-        if scale != gesScale {
-            gesScale = scale
+        if scale != currentGestureScale {
+            currentGestureScale = scale
             scaleChanged = true
         }
-        
+
         if ges.state == .began {
             setOperation(true)
         } else if ges.state == .changed {
@@ -244,108 +244,108 @@ class MahaBaseStickerView: UIView, UIGestureRecognizerDelegate {
             }
         } else if ges.state == .ended || ges.state == .cancelled {
             // 当有拖动时，在panAction中执行setOperation(false)
-            if gesTranslationPoint == .zero {
+            if currentGestureTranslation == .zero {
                 setOperation(false)
             }
         }
     }
-    
+
     @objc func rotationAction(_ ges: UIRotationGestureRecognizer) {
-        guard gesIsEnabled else { return }
-        
-        gesRotation += ges.rotation
+        guard isGestureEnabled else { return }
+
+        currentGestureRotation += ges.rotation
         ges.rotation = 0
-        
+
         if ges.state == .began {
             setOperation(true)
         } else if ges.state == .changed {
             updateTransform()
         } else if ges.state == .ended || ges.state == .cancelled {
-            if gesTranslationPoint == .zero {
+            if currentGestureTranslation == .zero {
                 setOperation(false)
             }
         }
     }
-    
+
     @objc func panAction(_ ges: UIPanGestureRecognizer) {
-        guard gesIsEnabled else { return }
-        
+        guard isGestureEnabled else { return }
+
         let point = ges.translation(in: superview)
-        gesTranslationPoint = CGPoint(x: point.x / originScale, y: point.y / originScale)
-        
+        currentGestureTranslation = CGPoint(x: point.x / originScale, y: point.y / originScale)
+
         if ges.state == .began {
             setOperation(true)
         } else if ges.state == .changed {
             updateTransform()
         } else if ges.state == .ended || ges.state == .cancelled {
-            totalTranslationPoint.x += point.x
-            totalTranslationPoint.y += point.y
+            totalTranslation.x += point.x
+            totalTranslation.y += point.y
             setOperation(false)
             let direction = direction(for: originAngle)
             if direction == .right {
-                originTransform = originTransform.translatedBy(x: gesTranslationPoint.y, y: -gesTranslationPoint.x)
+                originTransform = originTransform.translatedBy(x: currentGestureTranslation.y, y: -currentGestureTranslation.x)
             } else if direction == .bottom {
-                originTransform = originTransform.translatedBy(x: -gesTranslationPoint.x, y: -gesTranslationPoint.y)
+                originTransform = originTransform.translatedBy(x: -currentGestureTranslation.x, y: -currentGestureTranslation.y)
             } else if direction == .left {
-                originTransform = originTransform.translatedBy(x: -gesTranslationPoint.y, y: gesTranslationPoint.x)
+                originTransform = originTransform.translatedBy(x: -currentGestureTranslation.y, y: currentGestureTranslation.x)
             } else {
-                originTransform = originTransform.translatedBy(x: gesTranslationPoint.x, y: gesTranslationPoint.y)
+                originTransform = originTransform.translatedBy(x: currentGestureTranslation.x, y: currentGestureTranslation.y)
             }
-            gesTranslationPoint = .zero
+            currentGestureTranslation = .zero
         }
     }
-    
+
     func setOperation(_ isOn: Bool) {
-        if isOn, !onOperation {
-            onOperation = true
+        if isOn, !isOperating {
+            isOperating = true
             cleanTimer()
             borderView.layer.borderColor = UIColor.white.cgColor
             delegate?.stickerBeginOperation(self)
-        } else if !isOn, onOperation {
-            onOperation = false
+        } else if !isOn, isOperating {
+            isOperating = false
             startTimer()
-            delegate?.stickerEndOperation(self, panGes: panGes)
+            delegate?.stickerEndOperation(self, panGesture: panGesture)
         }
     }
-    
+
     func updateTransform() {
         var transform = originTransform
-        
+
         let direction = direction(for: originAngle)
         if direction == .right {
-            transform = transform.translatedBy(x: gesTranslationPoint.y, y: -gesTranslationPoint.x)
+            transform = transform.translatedBy(x: currentGestureTranslation.y, y: -currentGestureTranslation.x)
         } else if direction == .bottom {
-            transform = transform.translatedBy(x: -gesTranslationPoint.x, y: -gesTranslationPoint.y)
+            transform = transform.translatedBy(x: -currentGestureTranslation.x, y: -currentGestureTranslation.y)
         } else if direction == .left {
-            transform = transform.translatedBy(x: -gesTranslationPoint.y, y: gesTranslationPoint.x)
+            transform = transform.translatedBy(x: -currentGestureTranslation.y, y: currentGestureTranslation.x)
         } else {
-            transform = transform.translatedBy(x: gesTranslationPoint.x, y: gesTranslationPoint.y)
+            transform = transform.translatedBy(x: currentGestureTranslation.x, y: currentGestureTranslation.y)
         }
         // Scale must after translate.
-        transform = transform.scaledBy(x: gesScale, y: gesScale)
+        transform = transform.scaledBy(x: currentGestureScale, y: currentGestureScale)
         // Rotate must after scale.
-        transform = transform.rotated(by: gesRotation)
+        transform = transform.rotated(by: currentGestureRotation)
         self.transform = transform
-        
-        delegate?.stickerOnOperation(self, panGes: panGes)
+
+        delegate?.stickerOnOperation(self, panGesture: panGesture)
     }
-    
+
     @objc private func hideBorder() {
         borderView.layer.borderColor = UIColor.clear.cgColor
     }
-    
+
     func startTimer() {
         cleanTimer()
         borderView.layer.borderColor = UIColor.white.cgColor
-        timer = Timer.scheduledTimer(timeInterval: 2, target: MahaWeakProxy(target: self), selector: #selector(hideBorder), userInfo: nil, repeats: false)
-        RunLoop.current.add(timer!, forMode: .common)
+        borderHideTimer = Timer.scheduledTimer(timeInterval: 2, target: MahaWeakProxy(target: self), selector: #selector(hideBorder), userInfo: nil, repeats: false)
+        RunLoop.current.add(borderHideTimer!, forMode: .common)
     }
-    
+
     private func cleanTimer() {
-        timer?.invalidate()
-        timer = nil
+        borderHideTimer?.invalidate()
+        borderHideTimer = nil
     }
-    
+
     // MARK: UIGestureRecognizerDelegate
 
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
@@ -355,33 +355,33 @@ class MahaBaseStickerView: UIView, UIGestureRecognizerDelegate {
 
 extension MahaBaseStickerView: MahaStickerViewAdditional {
     func resetState() {
-        onOperation = false
+        isOperating = false
         cleanTimer()
         hideBorder()
     }
-    
+
     func moveToAshbin() {
         cleanTimer()
         removeFromSuperview()
     }
-    
+
     func addScale(_ scale: CGFloat) {
         // Revert zoom scale.
         transform = transform.scaledBy(x: 1 / originScale, y: 1 / originScale)
         // Revert ges scale.
-        transform = transform.scaledBy(x: 1 / gesScale, y: 1 / gesScale)
+        transform = transform.scaledBy(x: 1 / currentGestureScale, y: 1 / currentGestureScale)
         // Revert ges rotation.
-        transform = transform.rotated(by: -gesRotation)
-        
+        transform = transform.rotated(by: -currentGestureRotation)
+
         var origin = frame.origin
         origin.x *= scale
         origin.y *= scale
-        
+
         let newSize = CGSize(width: frame.width * scale, height: frame.height * scale)
         let newOrigin = CGPoint(x: frame.minX + (frame.width - newSize.width) / 2, y: frame.minY + (frame.height - newSize.height) / 2)
         let diffX: CGFloat = (origin.x - newOrigin.x)
         let diffY: CGFloat = (origin.y - newOrigin.y)
-        
+
         let direction = direction(for: originAngle)
         if direction == .right {
             transform = transform.translatedBy(x: diffY, y: -diffX)
@@ -396,19 +396,19 @@ extension MahaBaseStickerView: MahaStickerViewAdditional {
             transform = transform.translatedBy(x: diffX, y: diffY)
             originTransform = originTransform.translatedBy(x: diffX / originScale, y: diffY / originScale)
         }
-        totalTranslationPoint.x += diffX
-        totalTranslationPoint.y += diffY
-        
+        totalTranslation.x += diffX
+        totalTranslation.y += diffY
+
         transform = transform.scaledBy(x: scale, y: scale)
-        
+
         // Readd zoom scale.
         transform = transform.scaledBy(x: originScale, y: originScale)
         // Readd ges scale.
-        transform = transform.scaledBy(x: gesScale, y: gesScale)
+        transform = transform.scaledBy(x: currentGestureScale, y: currentGestureScale)
         // Readd ges rotation.
-        transform = transform.rotated(by: gesRotation)
-        
-        gesScale *= scale
-        maxGesScale *= scale
+        transform = transform.rotated(by: currentGestureRotation)
+
+        currentGestureScale *= scale
+        maximumGestureScale *= scale
     }
 }

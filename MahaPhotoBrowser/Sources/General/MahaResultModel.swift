@@ -28,8 +28,10 @@ import UIKit
 import Photos
 
 public class MahaResultModel: NSObject {
+    /// The asset returned after selection. It may be a newly saved asset after editing.
     @objc public let asset: PHAsset
     
+    /// Final image result corresponding to the selected asset.
     @objc public let image: UIImage
     
     /// Whether the picture has been edited. Always false when `saveNewImageAfterEdit = true`.
@@ -39,14 +41,14 @@ public class MahaResultModel: NSObject {
     @objc public let editModel: MahaEditImageModel?
     
     /// The order in which the user selects the models in the album. This index is not necessarily equal to the order of the model's index in the array, as some PHAssets requests may fail.
-    @objc public let index: Int
+    @objc public let selectionIndex: Int
     
     @objc public init(asset: PHAsset, image: UIImage, isEdited: Bool, editModel: MahaEditImageModel? = nil, index: Int) {
         self.asset = asset
         self.image = image
         self.isEdited = isEdited
         self.editModel = editModel
-        self.index = index
+        selectionIndex = index
         super.init()
     }
 }

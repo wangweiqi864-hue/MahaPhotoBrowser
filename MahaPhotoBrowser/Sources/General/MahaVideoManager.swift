@@ -30,13 +30,13 @@ import Photos
 
 public class MahaVideoManager: NSObject {
     class func getVideoExportFilePath(format: String? = nil) -> String {
-        let format = format ?? MahaPhotoConfiguration.default().cameraConfiguration.videoExportType.format
-        return NSTemporaryDirectory().appendingFormat("%@.%@", UUID().uuidString, format)
+        let fileExtension = format ?? MahaPhotoConfiguration.default().cameraConfiguration.videoExportType.format
+        return NSTemporaryDirectory().appendingFormat("%@.%@", UUID().uuidString, fileExtension)
     }
     
     class func exportEditVideo(for asset: AVAsset, range: CMTimeRange, complete: @escaping ((URL?, Error?) -> Void)) {
-        let type: MahaVideoManager.ExportType = MahaPhotoConfiguration.default().cameraConfiguration.videoExportType == .mov ? .mov : .mp4
-        exportVideo(for: asset, range: range, exportType: type, presetName: AVAssetExportPresetPassthrough) { url, error in
+        let exportType: MahaVideoManager.ExportType = MahaPhotoConfiguration.default().cameraConfiguration.videoExportType == .mov ? .mov : .mp4
+        exportVideo(for: asset, range: range, exportType: exportType, presetName: AVAssetExportPresetPassthrough) { url, error in
             if url != nil {
                 complete(url!, error)
             } else {
@@ -50,8 +50,8 @@ public class MahaVideoManager: NSObject {
         let composition = AVMutableComposition()
         let assets = fileURLs.map { AVURLAsset(url: $0) }
         
-        var insertTime: CMTime = .zero
-        var assetVideoTracks: [AVAssetTrack] = []
+        var insertionTime: CMTime = .zero
+        var sourceVideoTracks: [AVAssetTrack] = []
         
         let compositionVideoTrack = composition.addMutableTrack(withMediaType: .video, preferredTrackID: CMPersistentTrackID())!
         let compositionAudioTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: CMPersistentTrackID())!
@@ -63,37 +63,37 @@ public class MahaVideoManager: NSObject {
                     try compositionVideoTrack.insertTimeRange(
                         timeRange,
                         of: videoTrack,
-                        at: insertTime
+                        at: insertionTime
                     )
                     
-                    assetVideoTracks.append(videoTrack)
+                    sourceVideoTracks.append(videoTrack)
                 }
                 
                 if let audioTrack = asset.tracks(withMediaType: .audio).first {
                     try compositionAudioTrack.insertTimeRange(
                         timeRange,
                         of: audioTrack,
-                        at: insertTime
+                        at: insertionTime
                     )
                 }
                 
-                insertTime = CMTimeAdd(insertTime, asset.duration)
+                insertionTime = CMTimeAdd(insertionTime, asset.duration)
             } catch {
                 completion(nil, NSError.videoMergeError)
                 return
             }
         }
         
-        guard assetVideoTracks.count == assets.count else {
+        guard sourceVideoTracks.count == assets.count else {
             completion(nil, NSError.videoMergeError)
             return
         }
         
-        let renderSize = getNaturalSize(videoTrack: assetVideoTracks[0])
+        let renderSize = getNaturalSize(videoTrack: sourceVideoTracks[0])
         
         let videoComposition = AVMutableVideoComposition()
-        videoComposition.instructions = getInstructions(compositionTrack: compositionVideoTrack, assetVideoTracks: assetVideoTracks, assets: assets)
-        videoComposition.frameDuration = assetVideoTracks[0].minFrameDuration
+        videoComposition.instructions = getInstructions(compositionTrack: compositionVideoTrack, assetVideoTracks: sourceVideoTracks, assets: assets)
+        videoComposition.frameDuration = sourceVideoTracks[0].minFrameDuration
         videoComposition.renderSize = renderSize
         videoComposition.renderScale = 1
         
@@ -115,11 +115,11 @@ public class MahaVideoManager: NSObject {
                     try await exportSession.export(to: outputURL, as: outputFileType)
                     
                     MahaMainAsync {
-                        let suc = exportSession.status == .completed
+                        let didSucceed = exportSession.status == .completed
                         if exportSession.status == .failed {
                             mahaDebugPrint("MahaPhotoBrowser: video export failed: \(exportSession.error?.localizedDescription ?? "")")
                         }
-                        completion(suc ? outputURL : nil, exportSession.error)
+                        completion(didSucceed ? outputURL : nil, exportSession.error)
                     }
                 } catch {
                     completion(nil, error)
@@ -128,11 +128,11 @@ public class MahaVideoManager: NSObject {
         } else {
             let completionHandler: () -> Void = { [weak exportSession] in
                 MahaMainAsync {
-                    let suc = exportSession?.status == .completed
+                    let didSucceed = exportSession?.status == .completed
                     if exportSession?.status == .failed {
                         mahaDebugPrint("MahaPhotoBrowser: video merge failed:  \(exportSession?.error?.localizedDescription ?? "")")
                     }
-                    completion(suc ? outputURL : nil, exportSession?.error)
+                    completion(didSucceed ? outputURL : nil, exportSession?.error)
                 }
             }
             
@@ -229,11 +229,11 @@ public extension MahaVideoManager {
                     try await exportSession.export(to: outputURL, as: exportType.avFileType)
                     
                     MahaMainAsync {
-                        let suc = exportSession.status == .completed
+                        let didSucceed = exportSession.status == .completed
                         if exportSession.status == .failed {
                             mahaDebugPrint("MahaPhotoBrowser: video export failed: \(exportSession.error?.localizedDescription ?? "")")
                         }
-                        complete(suc ? outputURL : nil, exportSession.error)
+                        complete(didSucceed ? outputURL : nil, exportSession.error)
                     }
                 } catch {
                     complete(nil, error)
@@ -242,11 +242,11 @@ public extension MahaVideoManager {
         } else {
             let completionHandler: () -> Void = { [weak exportSession] in
                 MahaMainAsync {
-                    let suc = exportSession?.status == .completed
+                    let didSucceed = exportSession?.status == .completed
                     if exportSession?.status == .failed {
                         mahaDebugPrint("MahaPhotoBrowser: video export failed: \(exportSession?.error?.localizedDescription ?? "")")
                     }
-                    complete(suc ? outputURL : nil, exportSession?.error)
+                    complete(didSucceed ? outputURL : nil, exportSession?.error)
                 }
             }
             

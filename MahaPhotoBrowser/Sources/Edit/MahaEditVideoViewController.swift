@@ -56,7 +56,7 @@ public class MahaEditVideoViewController: UIViewController {
         return btn
     }()
     
-    private var timer: Timer?
+    private var playbackLoopTimer: Timer?
     
     private lazy var playerLayer: AVPlayerLayer = {
         let layer = AVPlayerLayer()
@@ -110,20 +110,20 @@ public class MahaEditVideoViewController: UIViewController {
         return pan
     }()
     
-    private lazy var indicator: UIView = {
+    private lazy var playbackIndicatorView: UIView = {
         let view = UIView()
         view.backgroundColor = UIColor.white.withAlphaComponent(0.7)
         return view
     }()
     
-    private var measureCount = 0
+    private var frameImageCount = 0
     
     private lazy var interval: TimeInterval = {
         let assetDuration = round(self.avAsset.duration.seconds)
         return min(assetDuration, TimeInterval(MahaPhotoConfiguration.default().maxEditVideoTime)) / 10
     }()
     
-    private lazy var requestFrameImageQueue: OperationQueue = {
+    private lazy var frameImageRequestQueue: OperationQueue = {
         let queue = OperationQueue()
         queue.maxConcurrentOperationCount = 10
         return queue
@@ -133,11 +133,11 @@ public class MahaEditVideoViewController: UIViewController {
     
     private lazy var videoRequestID = PHInvalidImageRequestID
     
-    private var frameImageCache: [Int: UIImage] = [:]
+    private var cachedFrameImages: [Int: UIImage] = [:]
     
-    private var requestFailedFrameImageIndex: [Int] = []
+    private var failedFrameImageIndexes: [Int] = []
     
-    private var shouldLayout = true
+    private var needsLayoutUpdate = true
     
     private lazy var generator: AVAssetImageGenerator = {
         let g = AVAssetImageGenerator(asset: self.avAsset)
@@ -163,8 +163,8 @@ public class MahaEditVideoViewController: UIViewController {
     
     deinit {
         mahaDebugPrint("MahaEditVideoViewController deinit")
-        cleanTimer()
-        requestFrameImageQueue.cancelAllOperations()
+        invalidatePlaybackTimer()
+        frameImageRequestQueue.cancelAllOperations()
         if avAssetRequestID > PHInvalidImageRequestID {
             PHImageManager.default().cancelImageRequest(avAssetRequestID)
         }
@@ -204,15 +204,15 @@ public class MahaEditVideoViewController: UIViewController {
     
     override public func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        analysisAssetImages()
+        analyzeAssetImages()
     }
     
     override public func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        guard shouldLayout else {
+        guard needsLayoutUpdate else {
             return
         }
-        shouldLayout = false
+        needsLayoutUpdate = false
         
         mahaDebugPrint("edit video layout subviews")
         var insets = UIEdgeInsets(top: 20, left: 0, bottom: 0, right: 0)
@@ -246,7 +246,7 @@ public class MahaEditVideoViewController: UIViewController {
         let rightSideViewX = view.bounds.width - frameImageBorderView.frame.minX - leftRightSideViewW
         rightSideView.frame = CGRect(x: rightSideViewX, y: collectionView.frame.minY, width: leftRightSideViewW, height: MahaEditVideoViewController.frameImageSize.height)
         
-        frameImageBorderView.validRect = frameImageBorderView.convert(clipRect(), from: view)
+        frameImageBorderView.validRect = frameImageBorderView.convert(selectedClipRect(), from: view)
     }
     
     private func setupUI() {
@@ -255,7 +255,7 @@ public class MahaEditVideoViewController: UIViewController {
         view.layer.addSublayer(playerLayer)
         view.addSubview(collectionView)
         view.addSubview(frameImageBorderView)
-        view.addSubview(indicator)
+        view.addSubview(playbackIndicatorView)
         view.addSubview(leftSideView)
         view.addSubview(rightSideView)
         
@@ -277,22 +277,22 @@ public class MahaEditVideoViewController: UIViewController {
     }
     
     @objc private func doneBtnClick() {
-        cleanTimer()
+        invalidatePlaybackTimer()
         
-        let d = CGFloat(interval) * clipRect().width / MahaEditVideoViewController.frameImageSize.width
-        if MahaPhotoConfiguration.Second(round(d)) < MahaPhotoConfiguration.default().minSelectVideoDuration {
+        let selectedDuration = CGFloat(interval) * selectedClipRect().width / MahaEditVideoViewController.frameImageSize.width
+        if MahaPhotoConfiguration.Second(round(selectedDuration)) < MahaPhotoConfiguration.default().minSelectVideoDuration {
             let message = String(format: localLanguageTextValue(.shorterThanMinVideoDuration), MahaPhotoConfiguration.default().minSelectVideoDuration)
             showAlertView(message, self)
             return
         }
-        if MahaPhotoConfiguration.Second(round(d)) > MahaPhotoConfiguration.default().maxSelectVideoDuration {
+        if MahaPhotoConfiguration.Second(round(selectedDuration)) > MahaPhotoConfiguration.default().maxSelectVideoDuration {
             let message = String(format: localLanguageTextValue(.longerThanMaxVideoDuration), MahaPhotoConfiguration.default().maxSelectVideoDuration)
             showAlertView(message, self)
             return
         }
         
         // Max deviation is 0.01
-        if abs(d - round(CGFloat(avAsset.duration.seconds))) <= 0.01 {
+        if abs(selectedDuration - round(CGFloat(avAsset.duration.seconds))) <= 0.01 {
             dismiss(animated: animateDismiss) {
                 self.editFinishBlock?(nil)
             }
@@ -301,7 +301,7 @@ public class MahaEditVideoViewController: UIViewController {
         
         let hud = MahaProgressHUD.show(toast: .processing)
         
-        MahaVideoManager.exportEditVideo(for: avAsset, range: getTimeRange()) { [weak self] url, error in
+        MahaVideoManager.exportEditVideo(for: avAsset, range: selectedTimeRange()) { [weak self] url, error in
             hud.hide()
             if let er = error {
                 showAlertView(er.localizedDescription, self)
@@ -318,7 +318,7 @@ public class MahaEditVideoViewController: UIViewController {
         
         if pan.state == .began {
             frameImageBorderView.layer.borderColor = UIColor(white: 1, alpha: 0.4).cgColor
-            cleanTimer()
+            invalidatePlaybackTimer()
         } else if pan.state == .changed {
             let minX = frameImageBorderView.frame.minX
             let maxX = rightSideView.frame.minX - leftSideView.frame.width
@@ -326,12 +326,12 @@ public class MahaEditVideoViewController: UIViewController {
             var frame = leftSideView.frame
             frame.origin.x = min(maxX, max(minX, point.x))
             leftSideView.frame = frame
-            frameImageBorderView.validRect = frameImageBorderView.convert(clipRect(), from: view)
+            frameImageBorderView.validRect = frameImageBorderView.convert(selectedClipRect(), from: view)
             
-            playerLayer.player?.seek(to: getStartTime(), toleranceBefore: .zero, toleranceAfter: .zero)
+            playerLayer.player?.seek(to: playbackStartTime(), toleranceBefore: .zero, toleranceAfter: .zero)
         } else if pan.state == .ended || pan.state == .cancelled {
             frameImageBorderView.layer.borderColor = UIColor.clear.cgColor
-            startTimer()
+            startPlaybackTimer()
         }
     }
     
@@ -340,7 +340,7 @@ public class MahaEditVideoViewController: UIViewController {
         
         if pan.state == .began {
             frameImageBorderView.layer.borderColor = UIColor(white: 1, alpha: 0.4).cgColor
-            cleanTimer()
+            invalidatePlaybackTimer()
         } else if pan.state == .changed {
             let minX = leftSideView.frame.maxX
             let maxX = frameImageBorderView.frame.maxX - rightSideView.frame.width
@@ -348,25 +348,25 @@ public class MahaEditVideoViewController: UIViewController {
             var frame = rightSideView.frame
             frame.origin.x = min(maxX, max(minX, point.x))
             rightSideView.frame = frame
-            frameImageBorderView.validRect = frameImageBorderView.convert(clipRect(), from: view)
+            frameImageBorderView.validRect = frameImageBorderView.convert(selectedClipRect(), from: view)
             
-            playerLayer.player?.seek(to: getStartTime(), toleranceBefore: .zero, toleranceAfter: .zero)
+            playerLayer.player?.seek(to: playbackStartTime(), toleranceBefore: .zero, toleranceAfter: .zero)
         } else if pan.state == .ended || pan.state == .cancelled {
             frameImageBorderView.layer.borderColor = UIColor.clear.cgColor
-            startTimer()
+            startPlaybackTimer()
         }
     }
     
     @objc private func appWillResignActive() {
-        cleanTimer()
-        indicator.layer.removeAllAnimations()
+        invalidatePlaybackTimer()
+        playbackIndicatorView.layer.removeAllAnimations()
     }
     
     @objc private func appDidBecomeActive() {
-        startTimer()
+        startPlaybackTimer()
     }
     
-    private func analysisAssetImages() {
+    private func analyzeAssetImages() {
         let duration = round(avAsset.duration.seconds)
         guard duration > 0 else {
             showFetchFailedAlert()
@@ -376,45 +376,45 @@ public class MahaEditVideoViewController: UIViewController {
         let player = AVPlayer(playerItem: item)
         playerLayer.player = player
         
-        measureCount = Int(duration / interval)
+        frameImageCount = Int(duration / interval)
         collectionView.reloadData()
-        startTimer()
-        requestVideoMeasureFrameImage()
+        startPlaybackTimer()
+        requestFrameImages()
     }
     
-    private func requestVideoMeasureFrameImage() {
-        for i in 0..<measureCount {
-            let mes = TimeInterval(i) * interval
-            let time = CMTimeMakeWithSeconds(Float64(mes), preferredTimescale: avAsset.duration.timescale)
+    private func requestFrameImages() {
+        for index in 0..<frameImageCount {
+            let seconds = TimeInterval(index) * interval
+            let time = CMTimeMakeWithSeconds(Float64(seconds), preferredTimescale: avAsset.duration.timescale)
             
             let operation = MahaEditVideoFetchFrameImageOperation(generator: generator, time: time) { [weak self] image, _ in
-                self?.frameImageCache[Int(i)] = image
-                let cell = self?.collectionView.cellForItem(at: IndexPath(row: Int(i), section: 0)) as? MahaEditVideoFrameImageCell
+                self?.cachedFrameImages[index] = image
+                let cell = self?.collectionView.cellForItem(at: IndexPath(row: index, section: 0)) as? MahaEditVideoFrameImageCell
                 cell?.imageView.image = image
                 if image == nil {
-                    self?.requestFailedFrameImageIndex.append(i)
+                    self?.failedFrameImageIndexes.append(index)
                 }
             }
-            requestFrameImageQueue.addOperation(operation)
+            frameImageRequestQueue.addOperation(operation)
         }
     }
     
     @objc private func playPartVideo() {
-        playerLayer.player?.seek(to: getStartTime(), toleranceBefore: .zero, toleranceAfter: .zero)
+        playerLayer.player?.seek(to: playbackStartTime(), toleranceBefore: .zero, toleranceAfter: .zero)
         if (playerLayer.player?.rate ?? 0) == 0 {
             playerLayer.player?.play()
         }
     }
     
-    private func startTimer() {
-        cleanTimer()
-        let duration = interval * TimeInterval(clipRect().width / MahaEditVideoViewController.frameImageSize.width)
+    private func startPlaybackTimer() {
+        invalidatePlaybackTimer()
+        let duration = interval * TimeInterval(selectedClipRect().width / MahaEditVideoViewController.frameImageSize.width)
         
-        timer = Timer.scheduledTimer(timeInterval: duration, target: MahaWeakProxy(target: self), selector: #selector(playPartVideo), userInfo: nil, repeats: true)
-        timer?.fire()
-        RunLoop.main.add(timer!, forMode: .common)
+        playbackLoopTimer = Timer.scheduledTimer(timeInterval: duration, target: MahaWeakProxy(target: self), selector: #selector(playPartVideo), userInfo: nil, repeats: true)
+        playbackLoopTimer?.fire()
+        RunLoop.main.add(playbackLoopTimer!, forMode: .common)
         
-        indicator.isHidden = false
+        playbackIndicatorView.isHidden = false
         
         let indicatorW: CGFloat = 2
         let indicatorH = leftSideView.maha.height
@@ -427,37 +427,37 @@ public class MahaEditVideoViewController: UIViewController {
         }
         
         let fromFrame = CGRect(x: indicatorFromX, y: indicatorY, width: indicatorW, height: indicatorH)
-        indicator.frame = fromFrame
+        playbackIndicatorView.frame = fromFrame
         
         var toFrame = fromFrame
         toFrame.origin.x = indicatorToX
         
-        indicator.layer.removeAllAnimations()
+        playbackIndicatorView.layer.removeAllAnimations()
         UIView.animate(withDuration: duration, delay: 0, options: [.allowUserInteraction, .curveLinear, .repeat], animations: {
-            self.indicator.frame = toFrame
+            self.playbackIndicatorView.frame = toFrame
         }, completion: nil)
     }
     
-    private func cleanTimer() {
-        timer?.invalidate()
-        timer = nil
-        indicator.layer.removeAllAnimations()
-        indicator.isHidden = true
+    private func invalidatePlaybackTimer() {
+        playbackLoopTimer?.invalidate()
+        playbackLoopTimer = nil
+        playbackIndicatorView.layer.removeAllAnimations()
+        playbackIndicatorView.isHidden = true
         playerLayer.player?.pause()
     }
     
-    private func getStartTime() -> CMTime {
+    private func playbackStartTime() -> CMTime {
         var oneFrameDuration = interval
-        if measureCount > 10 {
-            // 如果measureCount > 10，计算出框选区域外，每一帧图片占的时长
-            oneFrameDuration = (avAsset.duration.seconds - Double(MahaPhotoConfiguration.default().maxEditVideoTime)) / Double(measureCount - 10)
+        if frameImageCount > 10 {
+            // 如果frameImageCount > 10，计算出框选区域外，每一帧图片占的时长
+            oneFrameDuration = (avAsset.duration.seconds - Double(MahaPhotoConfiguration.default().maxEditVideoTime)) / Double(frameImageCount - 10)
         }
         
         let offsetX = collectionView.contentOffset.x
         let previousSecond = offsetX / MahaEditVideoViewController.frameImageSize.width * oneFrameDuration
         
         // 框选区域内起始时长
-        let innerRect = frameImageBorderView.convert(clipRect(), from: view)
+        let innerRect = frameImageBorderView.convert(selectedClipRect(), from: view)
         let innerPreviousSecond: TimeInterval
         if isRTL() {
             innerPreviousSecond = (frameImageBorderView.maha.width - innerRect.maxX) / MahaEditVideoViewController.frameImageSize.width * interval
@@ -470,14 +470,14 @@ public class MahaEditVideoViewController: UIViewController {
         return CMTimeMakeWithSeconds(Float64(totalDuration), preferredTimescale: avAsset.duration.timescale)
     }
     
-    private func getTimeRange() -> CMTimeRange {
-        let start = getStartTime()
-        let d = CGFloat(interval) * clipRect().width / MahaEditVideoViewController.frameImageSize.width
-        let duration = CMTimeMakeWithSeconds(Float64(round(d)), preferredTimescale: avAsset.duration.timescale)
+    private func selectedTimeRange() -> CMTimeRange {
+        let start = playbackStartTime()
+        let selectedDuration = CGFloat(interval) * selectedClipRect().width / MahaEditVideoViewController.frameImageSize.width
+        let duration = CMTimeMakeWithSeconds(Float64(round(selectedDuration)), preferredTimescale: avAsset.duration.timescale)
         return CMTimeRangeMake(start: start, duration: duration)
     }
     
-    private func clipRect() -> CGRect {
+    private func selectedClipRect() -> CGRect {
         var frame = CGRect.zero
         frame.origin.x = leftSideView.frame.minX
         frame.origin.y = leftSideView.frame.minY
@@ -513,18 +513,18 @@ extension MahaEditVideoViewController: UIGestureRecognizerDelegate {
 
 extension MahaEditVideoViewController: UICollectionViewDataSource, UICollectionViewDelegateFlowLayout {
     public func scrollViewDidScroll(_ scrollView: UIScrollView) {
-        cleanTimer()
-        playerLayer.player?.seek(to: getStartTime(), toleranceBefore: .zero, toleranceAfter: .zero)
+        invalidatePlaybackTimer()
+        playerLayer.player?.seek(to: playbackStartTime(), toleranceBefore: .zero, toleranceAfter: .zero)
     }
     
     public func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
         if !decelerate {
-            startTimer()
+            startPlaybackTimer()
         }
     }
     
     public func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
-        startTimer()
+        startPlaybackTimer()
     }
     
     public func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, insetForSectionAt section: Int) -> UIEdgeInsets {
@@ -534,13 +534,13 @@ extension MahaEditVideoViewController: UICollectionViewDataSource, UICollectionV
     }
     
     public func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        return measureCount
+        return frameImageCount
     }
     
     public func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         let cell = collectionView.dequeueReusableCell(withReuseIdentifier: MahaEditVideoFrameImageCell.maha.identifier, for: indexPath) as! MahaEditVideoFrameImageCell
         
-        if let image = frameImageCache[indexPath.row] {
+        if let image = cachedFrameImages[indexPath.row] {
             cell.imageView.image = image
         }
         
@@ -548,19 +548,19 @@ extension MahaEditVideoViewController: UICollectionViewDataSource, UICollectionV
     }
     
     public func collectionView(_ collectionView: UICollectionView, willDisplay cell: UICollectionViewCell, forItemAt indexPath: IndexPath) {
-        if requestFailedFrameImageIndex.contains(indexPath.row) {
-            let mes = TimeInterval(indexPath.row) * interval
-            let time = CMTimeMakeWithSeconds(Float64(mes), preferredTimescale: avAsset.duration.timescale)
+        if failedFrameImageIndexes.contains(indexPath.row) {
+            let seconds = TimeInterval(indexPath.row) * interval
+            let time = CMTimeMakeWithSeconds(Float64(seconds), preferredTimescale: avAsset.duration.timescale)
             
             let operation = MahaEditVideoFetchFrameImageOperation(generator: generator, time: time) { [weak self] image, _ in
-                self?.frameImageCache[indexPath.row] = image
+                self?.cachedFrameImages[indexPath.row] = image
                 let cell = self?.collectionView.cellForItem(at: IndexPath(row: indexPath.row, section: 0)) as? MahaEditVideoFrameImageCell
                 cell?.imageView.image = image
                 if image != nil {
-                    self?.requestFailedFrameImageIndex.removeAll { $0 == indexPath.row }
+                    self?.failedFrameImageIndexes.removeAll { $0 == indexPath.row }
                 }
             }
-            requestFrameImageQueue.addOperation(operation)
+            frameImageRequestQueue.addOperation(operation)
         }
     }
 }

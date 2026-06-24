@@ -30,26 +30,26 @@ import UIKit
 
 class MahaClipOverlayView: UIView {
     static let cornerLineWidth: CGFloat = 3
-    
+
     private lazy var shadowView: UIView = {
         let view = UIView()
         view.backgroundColor = .black.withAlphaComponent(0.7)
         view.layer.mask = shadowMaskLayer
         return view
     }()
-    
+
     private lazy var shadowMaskLayer: CAShapeLayer = {
         let layer = CAShapeLayer()
         layer.fillRule = .evenOdd
         return layer
     }()
-    
+
     private lazy var cornerLinesView: UIView = {
         let view = UIView()
         view.layer.addSublayer(cornerLinesLayer)
         return view
     }()
-    
+
     private lazy var cornerLinesLayer: CAShapeLayer = {
         let layer = CAShapeLayer()
         layer.strokeColor = UIColor.white.cgColor
@@ -58,13 +58,13 @@ class MahaClipOverlayView: UIView {
         layer.contentsScale = UIScreen.main.scale
         return layer
     }()
-    
+
     private lazy var frameBorderView: UIView = {
         let view = UIView()
         view.layer.addSublayer(frameBorderLayer)
         return view
     }()
-    
+
     private lazy var frameBorderLayer: CAShapeLayer = {
         let layer = CAShapeLayer()
         layer.strokeColor = UIColor.white.cgColor
@@ -77,14 +77,14 @@ class MahaClipOverlayView: UIView {
         layer.shadowColor = UIColor.black.withAlphaComponent(0.7).cgColor
         return layer
     }()
-    
+
     private lazy var gridLinesView: UIView = {
         let view = UIView()
         view.layer.addSublayer(gridLinesLayer)
         view.alpha = 0
         return view
     }()
-    
+
     private lazy var gridLinesLayer: CAShapeLayer = {
         let layer = CAShapeLayer()
         layer.strokeColor = UIColor.white.cgColor
@@ -93,45 +93,45 @@ class MahaClipOverlayView: UIView {
         layer.contentsScale = UIScreen.main.scale
         return layer
     }()
-    
+
     var cropRect: CGRect = .zero
-    
+
     var isCircle = false {
         didSet {
             guard oldValue != isCircle else {
                 return
             }
-            
-            shadowMaskLayer.path = getShadowMaskLayerPath().cgPath
+
+            shadowMaskLayer.path = makeShadowMaskPath().cgPath
         }
     }
-    
+
     override init(frame: CGRect) {
         super.init(frame: frame)
-        
+
         setupUI()
     }
-    
+
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-    
+
     override func layoutSubviews() {
         super.layoutSubviews()
-        
+
         updateSubviewsFrame()
     }
-    
+
     private func setupUI() {
         addSubview(shadowView)
         addSubview(frameBorderView)
         addSubview(cornerLinesView)
         addSubview(gridLinesView)
-        
+
         updateSubviewsFrame()
     }
-    
+
     private func updateSubviewsFrame() {
         shadowView.frame = bounds
         shadowMaskLayer.frame = shadowView.bounds
@@ -142,8 +142,8 @@ class MahaClipOverlayView: UIView {
         gridLinesView.frame = bounds
         gridLinesLayer.frame = gridLinesView.bounds
     }
-    
-    private func getShadowMaskLayerPath() -> UIBezierPath {
+
+    private func makeShadowMaskPath() -> UIBezierPath {
         let path = UIBezierPath(rect: shadowView.frame)
         let transparentPath: UIBezierPath
         if isCircle {
@@ -154,12 +154,12 @@ class MahaClipOverlayView: UIView {
         path.append(transparentPath.reversing())
         return path
     }
-    
-    private func getCornerLinesLayerPath() -> UIBezierPath {
+
+    private func makeCornerLinesPath() -> UIBezierPath {
         let rect = cropRect.insetBy(dx: -Self.cornerLineWidth / 2, dy: -Self.cornerLineWidth / 2)
         let path = UIBezierPath()
         let length: CGFloat = 20
-        
+
         // 左上
         path.move(to: CGPoint(x: rect.minX + length, y: rect.minY))
         path.addLine(to: CGPoint(x: rect.minX, y: rect.minY))
@@ -174,18 +174,18 @@ class MahaClipOverlayView: UIView {
         path.move(to: CGPoint(x: rect.minX, y: rect.maxY - length))
         path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
         path.addLine(to: CGPoint(x: rect.minX + length, y: rect.maxY))
-        
+
         // 右下
         path.move(to: CGPoint(x: rect.maxX - length, y: rect.maxY))
         path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
         path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - length))
-        
+
         return path
     }
-    
-    private func getGridLinesLayerPath() -> UIBezierPath {
+
+    private func makeGridLinesPath() -> UIBezierPath {
         let path = UIBezierPath()
-        
+
         let r = cropRect.width / 2
         var diff: CGFloat = 0
         if isCircle && MahaPhotoConfiguration.default().editImageConfiguration.dimClippedAreaDuringAdjustments {
@@ -198,7 +198,7 @@ class MahaClipOverlayView: UIView {
             path.move(to: CGPoint(x: x, y: cropRect.minY + diff))
             path.addLine(to: CGPoint(x: x, y: cropRect.maxY - diff))
         }
-        
+
         // 画横线
         let dh = cropRect.height / 3
         for i in 1...2 {
@@ -206,16 +206,34 @@ class MahaClipOverlayView: UIView {
             path.move(to: CGPoint(x: cropRect.minX + diff, y: y))
             path.addLine(to: CGPoint(x: cropRect.maxX - diff, y: y))
         }
-        
+
         return path
     }
-    
+
+    private func addPathAnimation(
+        to layer: CAShapeLayer,
+        key: String,
+        to newPath: CGPath,
+        duration: TimeInterval
+    ) {
+        layer.removeAnimation(forKey: key)
+        let animation = MahaAnimationUtils.animation(
+            type: .path,
+            fromValue: layer.path,
+            toValue: newPath,
+            duration: duration,
+            isRemovedOnCompletion: true,
+            timingFunction: CAMediaTimingFunction(name: .easeInEaseOut)
+        )
+        layer.add(animation, forKey: key)
+    }
+
     func beginUpdate() {
         let config = MahaPhotoConfiguration.default().editImageConfiguration
         shadowView.alpha = config.dimClippedAreaDuringAdjustments ? 1 : 0
         gridLinesView.alpha = 1
     }
-    
+
     func endUpdate(delay: TimeInterval = 0) {
         UIView.animate(withDuration: 0.15, delay: delay) {
             if !MahaPhotoConfiguration.default().editImageConfiguration.dimClippedAreaDuringAdjustments {
@@ -224,85 +242,34 @@ class MahaClipOverlayView: UIView {
             self.gridLinesView.alpha = 0
         }
     }
-    
+
     func updateLayers(_ rect: CGRect, animate: Bool, endEditing: Bool) {
         cropRect = rect
-        
-        let shadowMaskPath = getShadowMaskLayerPath()
+
+        let shadowMaskPath = makeShadowMaskPath()
         let frameBorderPath = UIBezierPath(rect: rect)
-        let cornerLinesPath = getCornerLinesLayerPath()
-        let gridLinesPath = getGridLinesLayerPath()
-        
+        let cornerLinesPath = makeCornerLinesPath()
+        let gridLinesPath = makeGridLinesPath()
+
         let duration: TimeInterval = 0.25
-        func animateShadowMaskLayer() {
-            shadowMaskLayer.removeAnimation(forKey: "shadowMaskAnimation")
-            let animation = MahaAnimationUtils.animation(
-                type: .path,
-                fromValue: shadowMaskLayer.path,
-                toValue: shadowMaskPath.cgPath,
-                duration: duration,
-                isRemovedOnCompletion: true,
-                timingFunction: CAMediaTimingFunction(name: .easeInEaseOut)
-            )
-            shadowMaskLayer.add(animation, forKey: "shadowMaskAnimation")
-        }
-        
-        func animateFrameBorderLayer() {
-            frameBorderLayer.removeAnimation(forKey: "frameBorderAnimation")
-            let animation = MahaAnimationUtils.animation(
-                type: .path,
-                fromValue: frameBorderLayer.path,
-                toValue: frameBorderPath.cgPath,
-                duration: duration,
-                isRemovedOnCompletion: true,
-                timingFunction: CAMediaTimingFunction(name: .easeInEaseOut)
-            )
-            frameBorderLayer.add(animation, forKey: "frameBorderAnimation")
-        }
-        
-        func animateCornerLinesLayer() {
-            cornerLinesLayer.removeAnimation(forKey: "cornerLinesAnimation")
-            let animation = MahaAnimationUtils.animation(
-                type: .path,
-                fromValue: cornerLinesLayer.path,
-                toValue: cornerLinesPath.cgPath,
-                duration: duration,
-                isRemovedOnCompletion: true,
-                timingFunction: CAMediaTimingFunction(name: .easeInEaseOut)
-            )
-            cornerLinesLayer.add(animation, forKey: "cornerLinesAnimation")
-        }
-        
-        func animateGridLinesLayer() {
-            gridLinesLayer.removeAnimation(forKey: "gridLinesAnimation")
-            let animation = MahaAnimationUtils.animation(
-                type: .path,
-                fromValue: gridLinesLayer.path,
-                toValue: gridLinesPath.cgPath,
-                duration: duration,
-                isRemovedOnCompletion: true,
-                timingFunction: CAMediaTimingFunction(name: .easeInEaseOut)
-            )
-            gridLinesLayer.add(animation, forKey: "gridLinesAnimation")
-        }
-        
+
         if animate {
-            animateShadowMaskLayer()
-            animateFrameBorderLayer()
-            animateCornerLinesLayer()
-            animateGridLinesLayer()
+            addPathAnimation(to: shadowMaskLayer, key: "shadowMaskAnimation", to: shadowMaskPath.cgPath, duration: duration)
+            addPathAnimation(to: frameBorderLayer, key: "frameBorderAnimation", to: frameBorderPath.cgPath, duration: duration)
+            addPathAnimation(to: cornerLinesLayer, key: "cornerLinesAnimation", to: cornerLinesPath.cgPath, duration: duration)
+            addPathAnimation(to: gridLinesLayer, key: "gridLinesAnimation", to: gridLinesPath.cgPath, duration: duration)
         }
-        
+
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        
+
         shadowMaskLayer.path = shadowMaskPath.cgPath
         frameBorderLayer.path = frameBorderPath.cgPath
         cornerLinesLayer.path = cornerLinesPath.cgPath
         gridLinesLayer.path = gridLinesPath.cgPath
-        
+
         CATransaction.commit()
-        
+
         if animate, endEditing {
             endUpdate(delay: duration)
         }

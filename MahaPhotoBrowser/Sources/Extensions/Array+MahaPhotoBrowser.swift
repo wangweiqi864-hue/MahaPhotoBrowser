@@ -27,18 +27,24 @@
 import Photos
 import UIKit
 
+private extension Array where Element: Equatable {
+    func mahaRemovingDuplicates() -> [Element] {
+        enumerated()
+            .filter { index, element in
+                firstIndex(of: element) == index
+            }
+            .map(\.element)
+    }
+}
+
 extension MahaPhotoBrowserWrapper where Base == [PHAsset] {
     func removeDuplicate() -> [PHAsset] {
-        return base.enumerated().filter { index, value -> Bool in
-            base.firstIndex(of: value) == index
-        }.map { $0.element }
+        base.mahaRemovingDuplicates()
     }
 }
 
 extension MahaPhotoBrowserWrapper where Base == [MahaResultModel] {
     func removeDuplicate() -> [MahaResultModel] {
-        return base.enumerated().filter { index, value -> Bool in
-            base.firstIndex(of: value) == index
-        }.map { $0.element }
+        base.mahaRemovingDuplicates()
     }
 }

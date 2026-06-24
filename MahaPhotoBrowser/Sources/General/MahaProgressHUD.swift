@@ -27,10 +27,20 @@
 import UIKit
 
 public class MahaProgressHUD: UIView {
+    private enum Layout {
+        static let containerSize = CGSize(width: 135, height: 135)
+        static let cornerRadius: CGFloat = 12
+        static let iconSize = CGSize(width: 40, height: 40)
+        static let iconTop: CGFloat = 27
+        static let titleHorizontalInset: CGFloat = 10
+        static let titleTop: CGFloat = 70
+        static let titleHeight: CGFloat = 60
+    }
+
     private let style: MahaProgressHUD.Style
-    
+
     private lazy var loadingView = UIImageView(image: style.icon)
-    
+
     private lazy var titleLabel: UILabel = {
         let label = UILabel()
         label.textAlignment = .center
@@ -43,51 +53,61 @@ public class MahaProgressHUD: UIView {
         label.adjustsFontSizeToFitWidth = true
         return label
     }()
-    
-    private var timer: Timer?
-    
+
+    private var timeoutTimer: Timer?
+
     public var timeoutBlock: (() -> Void)?
-    
+
     deinit {
         mahaDebugPrint("MahaProgressHUD deinit")
-        cleanTimer()
+        invalidateTimeoutTimer()
     }
-    
+
     public init(style: MahaProgressHUD.Style) {
         self.style = style
         super.init(frame: UIScreen.main.bounds)
         setupUI()
     }
-    
+
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-    
+
     private func setupUI() {
-        let view = UIView(frame: CGRect(x: 0, y: 0, width: 135, height: 135))
-        view.layer.masksToBounds = true
-        view.layer.cornerRadius = 12
-        view.backgroundColor = style.bgColor
-        view.clipsToBounds = true
-        view.center = center
-        
+        let containerView = UIView(frame: CGRect(origin: .zero, size: Layout.containerSize))
+        containerView.layer.masksToBounds = true
+        containerView.layer.cornerRadius = Layout.cornerRadius
+        containerView.backgroundColor = style.bgColor
+        containerView.clipsToBounds = true
+        containerView.center = center
+
         if let effectStyle = style.blurEffectStyle {
             let effect = UIBlurEffect(style: effectStyle)
             let effectView = UIVisualEffectView(effect: effect)
-            effectView.frame = view.bounds
-            view.addSubview(effectView)
+            effectView.frame = containerView.bounds
+            containerView.addSubview(effectView)
         }
-        
-        loadingView.frame = CGRect(x: 135 / 2 - 20, y: 27, width: 40, height: 40)
-        view.addSubview(loadingView)
-        
-        titleLabel.frame = CGRect(x: 10, y: 70, width: view.bounds.width - 20, height: 60)
-        view.addSubview(titleLabel)
-        
-        addSubview(view)
+
+        loadingView.frame = CGRect(
+            x: (Layout.containerSize.width - Layout.iconSize.width) / 2,
+            y: Layout.iconTop,
+            width: Layout.iconSize.width,
+            height: Layout.iconSize.height
+        )
+        containerView.addSubview(loadingView)
+
+        titleLabel.frame = CGRect(
+            x: Layout.titleHorizontalInset,
+            y: Layout.titleTop,
+            width: containerView.bounds.width - Layout.titleHorizontalInset * 2,
+            height: Layout.titleHeight
+        )
+        containerView.addSubview(titleLabel)
+
+        addSubview(containerView)
     }
-    
+
     private func startAnimation() {
         let animation = CABasicAnimation(keyPath: "transform.rotation.z")
         animation.fromValue = 0
@@ -98,7 +118,7 @@ public class MahaProgressHUD: UIView {
         animation.isRemovedOnCompletion = false
         loadingView.layer.add(animation, forKey: nil)
     }
-    
+
     public func show(
         toast: MahaProgressHUD.Toast = .loading,
         in view: UIView? = UIApplication.shared.keyWindow,
@@ -109,30 +129,30 @@ public class MahaProgressHUD: UIView {
             self.startAnimation()
             view?.addSubview(self)
         }
-        
+
         if timeout > 0 {
-            cleanTimer()
-            timer = Timer.scheduledTimer(timeInterval: timeout, target: MahaWeakProxy(target: self), selector: #selector(timeout(_:)), userInfo: nil, repeats: false)
-            RunLoop.current.add(timer!, forMode: .default)
+            invalidateTimeoutTimer()
+            timeoutTimer = Timer.scheduledTimer(timeInterval: timeout, target: MahaWeakProxy(target: self), selector: #selector(handleTimeout(_:)), userInfo: nil, repeats: false)
+            RunLoop.current.add(timeoutTimer!, forMode: .default)
         }
     }
-    
+
     @objc public func hide() {
-        cleanTimer()
+        invalidateTimeoutTimer()
         MahaMainAsync {
             self.loadingView.layer.removeAllAnimations()
             self.removeFromSuperview()
         }
     }
-    
-    @objc func timeout(_ timer: Timer) {
+
+    @objc func handleTimeout(_ timer: Timer) {
         timeoutBlock?()
         hide()
     }
-    
-    func cleanTimer() {
-        timer?.invalidate()
-        timer = nil
+
+    func invalidateTimeoutTimer() {
+        timeoutTimer?.invalidate()
+        timeoutTimer = nil
     }
 }
 
@@ -155,7 +175,7 @@ public extension MahaProgressHUD {
         case lightBlur
         case dark
         case darkBlur
-        
+
         var bgColor: UIColor {
             switch self {
             case .light:
@@ -168,7 +188,7 @@ public extension MahaProgressHUD {
                 return UIColor.darkGray.withAlphaComponent(0.8)
             }
         }
-        
+
         var icon: UIImage? {
             switch self {
             case .light, .lightBlur:
@@ -177,7 +197,7 @@ public extension MahaProgressHUD {
                 return .maha.getImage("zl_loading_light")
             }
         }
-        
+
         var textColor: UIColor {
             switch self {
             case .light, .lightBlur:
@@ -186,7 +206,7 @@ public extension MahaProgressHUD {
                 return .white
             }
         }
-        
+
         var blurEffectStyle: UIBlurEffect.Style? {
             switch self {
             case .light, .dark:
@@ -198,12 +218,12 @@ public extension MahaProgressHUD {
             }
         }
     }
-    
+
     enum Toast {
         case loading
         case processing
         case custome(String)
-        
+
         var value: String {
             switch self {
             case .loading:

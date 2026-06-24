@@ -29,101 +29,100 @@ import AVFoundation
 
 class MahaPhotoPreviewPopInteractiveTransition: UIPercentDrivenInteractiveTransition {
     weak var transitionContext: UIViewControllerContextTransitioning?
-    
+
     weak var viewController: MahaPhotoPreviewController?
-    
-    lazy var dismissPanGes: UIPanGestureRecognizer = {
+
+    private let transitionAnimationDuration: TimeInterval = 0.3
+    private let cancelAnimationDuration: TimeInterval = 0.25
+
+    lazy var dismissPanGesture: UIPanGestureRecognizer = {
         let pan = UIPanGestureRecognizer(target: self, action: #selector(dismissPanAction(_:)))
         pan.delegate = self
         return pan
     }()
-    
-    var shadowView: UIView?
-    
-    var imageView: UIImageView?
-    
+
+    var transitionShadowView: UIView?
+
+    var transitionImageView: UIImageView?
+
     var playerLayer: AVPlayerLayer?
-    
-    var imageViewOriginalFrame: CGRect = .zero
-    
-    var startPanPoint: CGPoint = .zero
-    
-    var interactive = false
-    
+
+    var transitionImageOriginalFrame: CGRect = .zero
+
+    var panStartPoint: CGPoint = .zero
+
+    var isInteractive = false
+
     var currentCell: MahaPreviewBaseCell?
     /// 取消动画时候，是否需要将Y值修正为0
     var needCorrectYToZeroWhenCancel = false
-    
-    var translationBeforeInteractive: CGPoint = .zero
-    
+
+    var translationBeforeInteraction: CGPoint = .zero
+
     var shouldStartTransition: ((CGPoint) -> Bool)?
-    
+
     var startTransition: (() -> Void)?
-    
+
     var cancelTransition: (() -> Void)?
-    
+
     var finishTransition: (() -> Void)?
-    
+
     deinit {
         mahaDebugPrint("MahaPhotoPreviewPopInteractiveTransition deinit")
     }
-    
+
     init(viewController: MahaPhotoPreviewController) {
         self.viewController = viewController
         super.init()
-        
-        viewController.view.addGestureRecognizer(dismissPanGes)
+
+        viewController.view.addGestureRecognizer(dismissPanGesture)
     }
-    
+
     @objc func dismissPanAction(_ pan: UIPanGestureRecognizer) {
         guard canStartPan() else { return }
-        
+
         if pan.state == .began {
-            beginInterative(pan)
+            beginInteractiveTransition(with: pan)
         } else if pan.state == .changed {
-            if !interactive {
-                beginInterative(pan)
-                if interactive {
-                    translationBeforeInteractive = pan.translation(in: viewController?.view)
+            if !isInteractive {
+                beginInteractiveTransition(with: pan)
+                if isInteractive {
+                    translationBeforeInteraction = pan.translation(in: viewController?.view)
                 }
                 return
             }
-            
-            let result = panResult(pan)
-            imageView?.transform = CGAffineTransform(scaleX: result.scale, y: result.scale)
-            imageView?.center = CGPoint(x: result.frame.midX, y: result.frame.midY)
-//            imageView?.frame = result.frame
-            
-            shadowView?.alpha = pow(result.scale, 2)
-            
-            update(result.scale)
+
+            let panState = makePanState(for: pan)
+            transitionImageView?.transform = CGAffineTransform(scaleX: panState.scale, y: panState.scale)
+            transitionImageView?.center = CGPoint(x: panState.frame.midX, y: panState.frame.midY)
+
+            transitionShadowView?.alpha = pow(panState.scale, 2)
+
+            update(panState.scale)
         } else if pan.state == .cancelled || pan.state == .ended {
-            guard interactive else { return }
-            
-            let vel = pan.velocity(in: viewController?.view)
-            let p = pan.translation(in: viewController?.view)
-            let transY = p.y - translationBeforeInteractive.y
+            guard isInteractive else { return }
+
+            let velocity = pan.velocity(in: viewController?.view)
+            let translation = pan.translation(in: viewController?.view)
+            let transY = translation.y - translationBeforeInteraction.y
             let percent = max(0.0, transY / (viewController?.view.bounds.height ?? UIScreen.main.bounds.height))
-            
-            let dismiss = vel.y > 300 || (percent > 0.1 && vel.y >= 0)
-            
-            if dismiss {
+
+            let shouldDismiss = velocity.y > 300 || (percent > 0.1 && velocity.y >= 0)
+
+            if shouldDismiss {
                 finish()
             } else {
                 cancel()
             }
-            
-            imageViewOriginalFrame = .zero
-            startPanPoint = .zero
-            translationBeforeInteractive = .zero
-            interactive = false
+
+            resetInteractiveState()
         }
     }
-    
+
     /// 判断是否开始手势
     func canStartPan() -> Bool {
-        guard !interactive else { return true }
-        
+        guard !isInteractive else { return true }
+
         guard let viewController,
               let cell = viewController.collectionView.cellForItem(
                   at: IndexPath(row: viewController.currentIndex, section: 0)
@@ -132,7 +131,7 @@ class MahaPhotoPreviewPopInteractiveTransition: UIPercentDrivenInteractiveTransi
               let contentView = scrollView.subviews.first else {
             return true
         }
-        
+
         let convertRect = contentView.convert(contentView.bounds, to: scrollView)
         if scrollView.isZooming ||
             scrollView.isZoomBouncing ||
@@ -141,103 +140,105 @@ class MahaPhotoPreviewPopInteractiveTransition: UIPercentDrivenInteractiveTransi
             (convertRect.minX != 0 && contentView.maha.width > scrollView.maha.width) {
             return false
         }
-        
+
         return true
     }
-    
+
     /// 开始手势
-    func beginInterative(_ pan: UIPanGestureRecognizer) {
-        guard !interactive else { return }
-        
-        let vel = pan.velocity(in: viewController?.view)
-        if abs(vel.x) >= abs(vel.y) || vel.y <= 0 {
+    func beginInteractiveTransition(with pan: UIPanGestureRecognizer) {
+        guard !isInteractive else { return }
+
+        let velocity = pan.velocity(in: viewController?.view)
+        if abs(velocity.x) >= abs(velocity.y) || velocity.y <= 0 {
             return
         }
-        
-        startPanPoint = pan.location(in: viewController?.view)
-        interactive = true
+
+        panStartPoint = pan.location(in: viewController?.view)
+        isInteractive = true
         startTransition?()
         viewController?.navigationController?.popViewController(animated: true)
     }
-    
-    func panResult(_ pan: UIPanGestureRecognizer) -> (frame: CGRect, scale: CGFloat) {
+
+    func makePanState(for pan: UIPanGestureRecognizer) -> (frame: CGRect, scale: CGFloat) {
         // 拖动偏移量
         let translation = pan.translation(in: viewController?.view)
-        let transY = translation.y - translationBeforeInteractive.y
+        let transY = translation.y - translationBeforeInteraction.y
         let currentTouch = pan.location(in: viewController?.view)
-        
+
         // 由下拉的偏移值决定缩放比例，越往下偏移，缩得越小。scale值区间[0.3, 1.0]
         let scale = min(1.0, max(0.3, 1 - transY / UIScreen.main.bounds.height))
-        
-        let width = imageViewOriginalFrame.size.width * scale
-        let height = imageViewOriginalFrame.size.height * scale
-        
+
+        let width = transitionImageOriginalFrame.size.width * scale
+        let height = transitionImageOriginalFrame.size.height * scale
+
         // 计算x和y。保持手指在图片上的相对位置不变。
-        let xRate = (startPanPoint.x - imageViewOriginalFrame.origin.x) / imageViewOriginalFrame.size.width
+        let xRate = (panStartPoint.x - transitionImageOriginalFrame.origin.x) / transitionImageOriginalFrame.size.width
         let currentTouchDeltaX = xRate * width
         let x = currentTouch.x - currentTouchDeltaX
-        
-        let yRate = (startPanPoint.y - imageViewOriginalFrame.origin.y) / imageViewOriginalFrame.size.height
+
+        let yRate = (panStartPoint.y - transitionImageOriginalFrame.origin.y) / transitionImageOriginalFrame.size.height
         let currentTouchDeltaY = yRate * height
         let y = currentTouch.y - currentTouchDeltaY
-        
+
         return (CGRect(x: x.isNaN ? 0 : x, y: y.isNaN ? 0 : y, width: width, height: height), scale)
     }
-    
+
     override func startInteractiveTransition(_ transitionContext: UIViewControllerContextTransitioning) {
         self.transitionContext = transitionContext
-        startAnimate()
+        startTransitionAnimation()
     }
-    
-    func startAnimate() {
+
+    func startTransitionAnimation() {
         guard let transitionContext = transitionContext else {
             return
         }
-        
+
         guard let fromVC = transitionContext.viewController(forKey: .from) as? MahaPhotoPreviewController,
               let toVC = transitionContext.viewController(forKey: .to) as? MahaThumbnailViewController else {
             return
         }
-        
+
         let containerView = transitionContext.containerView
         containerView.addSubview(toVC.view)
-        
+
         guard let cell = fromVC.collectionView.cellForItem(at: IndexPath(row: fromVC.currentIndex, section: 0)) as? MahaPreviewBaseCell else {
             return
         }
-        
+
         currentCell = cell
-        shadowView = UIView(frame: containerView.bounds)
-        shadowView?.backgroundColor = MahaPhotoUIConfiguration.default().previewVCBgColor
-        containerView.addSubview(shadowView!)
-        
+        let shadowView = UIView(frame: containerView.bounds)
+        shadowView.backgroundColor = MahaPhotoUIConfiguration.default().previewVCBgColor
+        transitionShadowView = shadowView
+        containerView.addSubview(shadowView)
+
         let fromImageViewFrame = cell.animateImageFrame(convertTo: containerView)
-        
-        imageView = UIImageView(frame: fromImageViewFrame)
-        imageView?.contentMode = .scaleAspectFill
-        imageView?.clipsToBounds = true
-        
+
+        let imageView = UIImageView(frame: fromImageViewFrame)
+        imageView.contentMode = .scaleAspectFill
+        imageView.clipsToBounds = true
+        transitionImageView = imageView
+
         if let videoCell = cell as? MahaVideoPreviewCell, let playerLayer = videoCell.playerLayer, videoCell.imageView.isHidden {
             playerLayer.removeFromSuperlayer()
             self.playerLayer = playerLayer
-            imageView?.layer.insertSublayer(playerLayer, at: 0)
+            imageView.layer.insertSublayer(playerLayer, at: 0)
         } else {
-            imageView?.image = cell.currentImage
+            imageView.image = cell.currentImage
         }
-        
-        containerView.addSubview(imageView!)
+
+        containerView.addSubview(imageView)
         containerView.addSubview(fromVC.view)
-        
-        imageViewOriginalFrame = imageView!.frame
-        resetViewStatus(isStart: true)
+
+        transitionImageOriginalFrame = imageView.frame
+        updateSourceViewStatus(isTransitionStarting: true)
     }
-    
+
     override func finish() {
         super.finish()
-        finishAnimate()
+        finishTransitionAnimation()
     }
-    
-    func finishAnimate() {
+
+    func finishTransitionAnimation() {
         guard let transitionContext = transitionContext else {
             return
         }
@@ -245,106 +246,116 @@ class MahaPhotoPreviewPopInteractiveTransition: UIPercentDrivenInteractiveTransi
               let toVC = transitionContext.viewController(forKey: .to) as? MahaThumbnailViewController else {
             return
         }
-        
-        let fromVCModel = fromVC.arrDataSources[fromVC.currentIndex]
-        let toVCVisiableIndexPaths = toVC.collectionView.indexPathsForVisibleItems
-        
-        var diff = 0
+
+        let sourceModel = fromVC.arrDataSources[fromVC.currentIndex]
+        let visibleIndexPaths = toVC.collectionView.indexPathsForVisibleItems
+
+        var indexOffset = 0
         if !MahaPhotoUIConfiguration.default().sortAscending {
             if toVC.showCameraCell {
-                diff = -1
+                indexOffset = -1
             }
             if #available(iOS 14.0, *), toVC.showAddPhotoCell {
-                diff -= 1
+                indexOffset -= 1
             }
         }
         var toIndex: Int?
-        for indexPath in toVCVisiableIndexPaths {
-            let idx = indexPath.row + diff
-            if idx >= toVC.arrDataSources.count || idx < 0 {
+        for indexPath in visibleIndexPaths {
+            let dataSourceIndex = indexPath.row + indexOffset
+            if dataSourceIndex >= toVC.arrDataSources.count || dataSourceIndex < 0 {
                 continue
             }
-            let m = toVC.arrDataSources[idx]
-            if m == fromVCModel {
+            let model = toVC.arrDataSources[dataSourceIndex]
+            if model == sourceModel {
                 toIndex = indexPath.row
                 break
             }
         }
-        
+
         var toFrame: CGRect?
-        
+
         if let toIndex = toIndex, let toCell = toVC.collectionView.cellForItem(at: IndexPath(row: toIndex, section: 0)) {
             toFrame = toVC.collectionView.convert(toCell.frame, to: transitionContext.containerView)
         }
-        
+
         toVC.endPopTransition()
-        
-        UIView.animate(withDuration: 0.3, animations: {
+
+        UIView.animate(withDuration: transitionAnimationDuration, animations: {
             if let toFrame, self.playerLayer == nil {
-                self.imageView?.transform = .identity
-                self.imageView?.frame = toFrame
+                self.transitionImageView?.transform = .identity
+                self.transitionImageView?.frame = toFrame
             } else {
-                self.imageView?.alpha = 0
+                self.transitionImageView?.alpha = 0
             }
-            self.shadowView?.alpha = 0
+            self.transitionShadowView?.alpha = 0
         }) { _ in
-            self.imageView?.removeFromSuperview()
-            self.shadowView?.removeFromSuperview()
-            self.imageView = nil
-            self.shadowView = nil
+            self.cleanupTemporaryViews()
             self.finishTransition?()
             transitionContext.finishInteractiveTransition()
             transitionContext.completeTransition(!transitionContext.transitionWasCancelled)
         }
     }
-    
+
     override func cancel() {
         super.cancel()
-        cancelAnimate()
+        cancelTransitionAnimation()
     }
-    
-    func cancelAnimate() {
+
+    func cancelTransitionAnimation() {
         guard let transitionContext = transitionContext else {
             return
         }
-        
-        var toFrame = imageViewOriginalFrame
+
+        var toFrame = transitionImageOriginalFrame
         if needCorrectYToZeroWhenCancel {
             toFrame.origin.y = 0
         }
-        
-        UIView.animate(withDuration: 0.25, animations: {
-            self.imageView?.transform = .identity
-            self.imageView?.frame = toFrame
-            self.shadowView?.alpha = 1
+
+        UIView.animate(withDuration: cancelAnimationDuration, animations: {
+            self.transitionImageView?.transform = .identity
+            self.transitionImageView?.frame = toFrame
+            self.transitionShadowView?.alpha = 1
         }) { _ in
-            self.resetViewStatus(isStart: false)
+            self.updateSourceViewStatus(isTransitionStarting: false)
             if let playerLayer = self.playerLayer {
                 playerLayer.removeFromSuperlayer()
                 (self.currentCell as? MahaVideoPreviewCell)?.playerView.layer.insertSublayer(playerLayer, at: 0)
             }
             self.currentCell = nil
             self.playerLayer = nil
-            self.imageView?.removeFromSuperview()
-            self.shadowView?.removeFromSuperview()
+            self.cleanupTemporaryViews()
             self.cancelTransition?()
             transitionContext.cancelInteractiveTransition()
             transitionContext.completeTransition(!transitionContext.transitionWasCancelled)
         }
     }
-    
-    func resetViewStatus(isStart: Bool) {
-        currentCell?.scrollView?.isScrollEnabled = !isStart
-        currentCell?.scrollView?.pinchGestureRecognizer?.isEnabled = !isStart
-        (currentCell as? MahaVideoPreviewCell)?.singleTapGes.isEnabled = !isStart
-        
+
+    func updateSourceViewStatus(isTransitionStarting: Bool) {
+        currentCell?.scrollView?.isScrollEnabled = !isTransitionStarting
+        currentCell?.scrollView?.pinchGestureRecognizer?.isEnabled = !isTransitionStarting
+        (currentCell as? MahaVideoPreviewCell)?.singleTapGes.isEnabled = !isTransitionStarting
+
         guard let transitionContext = transitionContext,
               let fromVC = transitionContext.viewController(forKey: .from) as? MahaPhotoPreviewController else {
             return
         }
-        
-        fromVC.view.backgroundColor = isStart ? .clear : MahaPhotoUIConfiguration.default().previewVCBgColor
-        fromVC.collectionView.isHidden = isStart
+
+        fromVC.view.backgroundColor = isTransitionStarting ? .clear : MahaPhotoUIConfiguration.default().previewVCBgColor
+        fromVC.collectionView.isHidden = isTransitionStarting
+    }
+
+    private func cleanupTemporaryViews() {
+        transitionImageView?.removeFromSuperview()
+        transitionShadowView?.removeFromSuperview()
+        transitionImageView = nil
+        transitionShadowView = nil
+    }
+
+    private func resetInteractiveState() {
+        transitionImageOriginalFrame = .zero
+        panStartPoint = .zero
+        translationBeforeInteraction = .zero
+        isInteractive = false
     }
 }
 
@@ -361,20 +372,20 @@ extension MahaPhotoPreviewPopInteractiveTransition: UIGestureRecognizerDelegate 
             let contentSizeH = scrollView.contentSize.height
             needCorrectYToZeroWhenCancel = contentSizeH > scrollView.maha.height && scrollView.contentOffset.y >= 0
         }
-        
+
         return shouldBegin
     }
-    
+
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
         if otherGestureRecognizer is UITapGestureRecognizer,
            otherGestureRecognizer.view is UIScrollView {
             return false
         }
-        
+
         if otherGestureRecognizer == viewController?.collectionView.panGestureRecognizer {
             return false
         }
-        
+
         return !(viewController?.collectionView.isDragging ?? false)
     }
 }

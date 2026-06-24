@@ -721,9 +721,9 @@ public class MahaPhotoPreviewSheet: UIView {
         let nav = getImageNav(rootViewController: vc)
         vc.backBlock = { [weak self, weak nav] in
             guard let `self` = self else { return }
-            self.isSelectOriginal = nav?.isSelectedOriginal ?? false
+            self.isSelectOriginal = nav?.isOriginalSelectionEnabled ?? false
             self.arrSelectedModels.removeAll()
-            self.arrSelectedModels.append(contentsOf: nav?.arrSelectedModels ?? [])
+            self.arrSelectedModels.append(contentsOf: nav?.selectedPhotoModels ?? [])
             markSelected(source: &self.arrDataSources, selected: &self.arrSelectedModels)
             self.collectionView.reloadItems(at: self.collectionView.indexPathsForVisibleItems)
             self.changeCancelBtnTitle()
@@ -818,10 +818,10 @@ public class MahaPhotoPreviewSheet: UIView {
     private func getImageNav(rootViewController: UIViewController) -> MahaImageNavController {
         let nav = MahaImageNavController(rootViewController: rootViewController)
         nav.modalPresentationStyle = .fullScreen
-        nav.selectImageBlock = { [weak self, weak nav] in
-            self?.isSelectOriginal = nav?.isSelectedOriginal ?? false
+        nav.selectPhotosHandler = { [weak self, weak nav] in
+            self?.isSelectOriginal = nav?.isOriginalSelectionEnabled ?? false
             self?.arrSelectedModels.removeAll()
-            self?.arrSelectedModels.append(contentsOf: nav?.arrSelectedModels ?? [])
+            self?.arrSelectedModels.append(contentsOf: nav?.selectedPhotoModels ?? [])
             
             if let block = self?.selectPhotosBlock {
                 nav?.dismiss(animated: true) {
@@ -832,14 +832,14 @@ public class MahaPhotoPreviewSheet: UIView {
             }
         }
         
-        nav.cancelBlock = { [weak self] in
+        nav.cancelHandler = { [weak self] in
             self?.hide {
                 self?.cancelBlock?()
             }
         }
-        nav.isSelectedOriginal = isSelectOriginal
-        nav.arrSelectedModels.removeAll()
-        nav.arrSelectedModels.append(contentsOf: arrSelectedModels)
+        nav.isOriginalSelectionEnabled = isSelectOriginal
+        nav.selectedPhotoModels.removeAll()
+        nav.selectedPhotoModels.append(contentsOf: arrSelectedModels)
         
         return nav
     }

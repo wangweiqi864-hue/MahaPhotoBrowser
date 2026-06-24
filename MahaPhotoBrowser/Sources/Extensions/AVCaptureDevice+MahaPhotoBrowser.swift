@@ -28,19 +28,18 @@ import AVFoundation
 
 extension MahaPhotoBrowserWrapper where Base: AVCaptureDevice {
     var defaultZoomFactor: CGFloat {
-        let fallback: CGFloat = 1.0
-        guard #available(iOS 13.0, *) else { return fallback }
+        let defaultZoomFallback: CGFloat = 1.0
+        guard #available(iOS 13.0, *) else { return defaultZoomFallback }
 
-        if let wideAngleIndex = base.constituentDevices.firstIndex(where: { $0.deviceType == .builtInWideAngleCamera }) {
-            guard wideAngleIndex >= 1 else { return fallback }
-            return CGFloat(base.virtualDeviceSwitchOverVideoZoomFactors[wideAngleIndex - 1].doubleValue)
+        if let wideAngleDeviceIndex = base.constituentDevices.firstIndex(where: { $0.deviceType == .builtInWideAngleCamera }) {
+            guard wideAngleDeviceIndex >= 1 else { return defaultZoomFallback }
+            return CGFloat(base.virtualDeviceSwitchOverVideoZoomFactors[wideAngleDeviceIndex - 1].doubleValue)
         }
 
-        return fallback
+        return defaultZoomFallback
     }
 
     func normalizedZoomFactor(for zoomFactor: CGFloat) -> CGFloat {
-        zoomFactor / self.defaultZoomFactor
+        return zoomFactor / defaultZoomFactor
     }
 }
-

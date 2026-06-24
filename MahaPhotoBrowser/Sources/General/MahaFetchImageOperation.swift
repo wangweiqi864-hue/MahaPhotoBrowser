@@ -36,7 +36,7 @@ class MahaFetchImageOperation: Operation, @unchecked Sendable {
     
     private let completion: (UIImage?, PHAsset?) -> Void
     
-    private var pri_isExecuting = false {
+    private var isOperationExecuting = false {
         willSet {
             self.willChangeValue(forKey: "isExecuting")
         }
@@ -46,10 +46,10 @@ class MahaFetchImageOperation: Operation, @unchecked Sendable {
     }
     
     override var isExecuting: Bool {
-        return pri_isExecuting
+        return isOperationExecuting
     }
     
-    private var pri_isFinished = false {
+    private var isOperationFinished = false {
         willSet {
             self.willChangeValue(forKey: "isFinished")
         }
@@ -59,10 +59,10 @@ class MahaFetchImageOperation: Operation, @unchecked Sendable {
     }
     
     override var isFinished: Bool {
-        return pri_isFinished
+        return isOperationFinished
     }
     
-    private var pri_isCancelled = false {
+    private var isOperationCancelled = false {
         willSet {
             willChangeValue(forKey: "isCancelled")
         }
@@ -71,10 +71,10 @@ class MahaFetchImageOperation: Operation, @unchecked Sendable {
         }
     }
     
-    private var requestImageID = PHInvalidImageRequestID
+    private var imageRequestID = PHInvalidImageRequestID
     
     override var isCancelled: Bool {
-        return pri_isCancelled
+        return isOperationCancelled
     }
     
     init(
@@ -92,53 +92,53 @@ class MahaFetchImageOperation: Operation, @unchecked Sendable {
     
     override func start() {
         if isCancelled {
-            fetchFinish()
+            finishFetching()
             return
         }
         mahaDebugPrint("---- start fetch")
-        pri_isExecuting = true
+        isOperationExecuting = true
         
         // 存在编辑的图片
         if let editImage = model.editImage {
             if MahaPhotoConfiguration.default().saveNewImageAfterEdit {
                 MahaPhotoManager.saveImageToAlbum(image: editImage) { [weak self] _, asset in
                     self?.completion(editImage, asset)
-                    self?.fetchFinish()
+                    self?.finishFetching()
                 }
             } else {
                 MahaMainAsync {
                     self.completion(editImage, nil)
-                    self.fetchFinish()
+                    self.finishFetching()
                 }
             }
             return
         }
         
         if MahaPhotoConfiguration.default().allowSelectGif, model.type == .gif {
-            requestImageID = MahaPhotoManager.fetchOriginalImageData(for: model.asset) { [weak self] data, _, isDegraded in
+            imageRequestID = MahaPhotoManager.fetchOriginalImageData(for: model.asset) { [weak self] data, _, isDegraded in
                 if !isDegraded {
                     let image = UIImage.maha.animateGifImage(data: data)
                     self?.completion(image, nil)
-                    self?.fetchFinish()
+                    self?.finishFetching()
                 }
             }
             return
         }
         
         if isOriginal {
-            requestImageID = MahaPhotoManager.fetchOriginalImage(for: model.asset, progress: progress) { [weak self] image, isDegraded in
+            imageRequestID = MahaPhotoManager.fetchOriginalImage(for: model.asset, progress: progress) { [weak self] image, isDegraded in
                 if !isDegraded {
                     mahaDebugPrint("---- 原图加载完成 \(String(describing: self?.isCancelled))")
                     self?.completion(image?.maha.fixOrientation(), nil)
-                    self?.fetchFinish()
+                    self?.finishFetching()
                 }
             }
         } else {
-            requestImageID = MahaPhotoManager.fetchImage(for: model.asset, size: model.previewSize, progress: progress) { [weak self] image, isDegraded in
+            imageRequestID = MahaPhotoManager.fetchImage(for: model.asset, size: model.previewSize, progress: progress) { [weak self] image, isDegraded in
                 if !isDegraded {
                     mahaDebugPrint("---- 加载完成 isCancelled: \(String(describing: self?.isCancelled))")
-                    self?.completion(self?.scaleImage(image?.maha.fixOrientation()), nil)
-                    self?.fetchFinish()
+                    self?.completion(self?.makeCompressedImageIfNeeded(from: image?.maha.fixOrientation()), nil)
+                    self?.finishFetching()
                 }
             }
         }
@@ -146,36 +146,36 @@ class MahaFetchImageOperation: Operation, @unchecked Sendable {
     
     override func cancel() {
         super.cancel()
-        mahaDebugPrint("---- cancel \(isExecuting) \(requestImageID)")
-        PHImageManager.default().cancelImageRequest(requestImageID)
-        pri_isCancelled = true
+        mahaDebugPrint("---- cancel \(isExecuting) \(imageRequestID)")
+        PHImageManager.default().cancelImageRequest(imageRequestID)
+        isOperationCancelled = true
         if isExecuting {
-            fetchFinish()
+            finishFetching()
         }
     }
     
-    private func scaleImage(_ image: UIImage?) -> UIImage? {
-        guard let i = image else {
+    private func makeCompressedImageIfNeeded(from image: UIImage?) -> UIImage? {
+        guard let image else {
             return nil
         }
-        guard let data = i.jpegData(compressionQuality: 1) else {
-            return i
+        guard let originalData = image.jpegData(compressionQuality: 1) else {
+            return image
         }
-        let mUnit: CGFloat = 1024 * 1024
+        let megaByteUnit: CGFloat = 1024 * 1024
         
-        if data.count < Int(0.2 * mUnit) {
-            return i
+        if originalData.count < Int(0.2 * megaByteUnit) {
+            return image
         }
-        let scale: CGFloat = (data.count > Int(mUnit) ? 0.6 : 0.8)
+        let compressionQuality: CGFloat = originalData.count > Int(megaByteUnit) ? 0.6 : 0.8
         
-        guard let d = i.jpegData(compressionQuality: scale) else {
-            return i
+        guard let compressedData = image.jpegData(compressionQuality: compressionQuality) else {
+            return image
         }
-        return UIImage(data: d)
+        return UIImage(data: compressedData)
     }
     
-    private func fetchFinish() {
-        pri_isExecuting = false
-        pri_isFinished = true
+    private func finishFetching() {
+        isOperationExecuting = false
+        isOperationFinished = true
     }
 }

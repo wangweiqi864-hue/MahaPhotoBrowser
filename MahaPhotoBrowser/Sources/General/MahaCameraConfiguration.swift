@@ -29,47 +29,47 @@ import AVFoundation
 
 @objcMembers
 public class MahaCameraConfiguration: NSObject {
-    private var pri_allowTakePhoto = true
+    private var allowsTakingPhoto = true
     /// Allow taking photos in the camera (Need allowSelectImage to be true). Defaults to true.
     public var allowTakePhoto: Bool {
         get {
-            pri_allowTakePhoto && MahaPhotoConfiguration.default().allowSelectImage
+            allowsTakingPhoto && MahaPhotoConfiguration.default().allowSelectImage
         }
         set {
-            pri_allowTakePhoto = newValue
+            allowsTakingPhoto = newValue
         }
     }
     
-    private var pri_allowRecordVideo = true
+    private var allowsRecordingVideo = true
     /// Allow recording in the camera (Need allowSelectVideo to be true). Defaults to true.
     public var allowRecordVideo: Bool {
         get {
-            pri_allowRecordVideo && MahaPhotoConfiguration.default().allowSelectVideo
+            allowsRecordingVideo && MahaPhotoConfiguration.default().allowSelectVideo
         }
         set {
-            pri_allowRecordVideo = newValue
+            allowsRecordingVideo = newValue
         }
     }
     
-    private var pri_minRecordDuration: MahaPhotoConfiguration.Second = 0
+    private var minimumRecordDuration: MahaPhotoConfiguration.Second = 0
     /// Minimum recording duration. Defaults to 0.
     public var minRecordDuration: MahaPhotoConfiguration.Second {
         get {
-            pri_minRecordDuration
+            minimumRecordDuration
         }
         set {
-            pri_minRecordDuration = max(0, newValue)
+            minimumRecordDuration = max(0, newValue)
         }
     }
     
-    private var pri_maxRecordDuration: MahaPhotoConfiguration.Second = 20
+    private var maximumRecordDuration: MahaPhotoConfiguration.Second = 20
     /// Maximum recording duration. Defaults to 20, minimum is 1.
     public var maxRecordDuration: MahaPhotoConfiguration.Second {
         get {
-            pri_maxRecordDuration
+            maximumRecordDuration
         }
         set {
-            pri_maxRecordDuration = max(1, newValue)
+            maximumRecordDuration = max(1, newValue)
         }
     }
     
@@ -96,17 +96,17 @@ public class MahaCameraConfiguration: NSObject {
     /// If `allowTakePhoto` is true, `tapToRecordVideo` will be ignored.
     public var tapToRecordVideo: Bool = false
     
-    private var _enableWideCameras: Bool = false
+    private var wideCamerasEnabled = false
     
     /// Enable the use of wide cameras (e.g., .builtInTripleCamera, .builtInDualWideCamera, .builtInDualCamera).
     /// Only available on iOS 13.0 and higher, defaults to false.
     @available(iOS 13.0, *)
     public var enableWideCameras: Bool {
         get {
-            return _enableWideCameras
+            wideCamerasEnabled
         }
         set {
-            _enableWideCameras = newValue
+            wideCamerasEnabled = newValue
         }
     }
     
@@ -127,15 +127,15 @@ public class MahaCameraConfiguration: NSObject {
     /// The default camera position after entering the camera. Defaults to back.
     public var devicePosition: MahaCameraConfiguration.DevicePosition = .back
     
-    private var pri_videoCodecType: Any?
+    private var storedVideoCodecType: Any?
     /// The codecs for video capture. Defaults to .h264
     @available(iOS 11.0, *)
     public var videoCodecType: AVVideoCodecType {
         get {
-            (pri_videoCodecType as? AVVideoCodecType) ?? .h264
+            (storedVideoCodecType as? AVVideoCodecType) ?? .h264
         }
         set {
-            pri_videoCodecType = newValue
+            storedVideoCodecType = newValue
         }
     }
     
@@ -171,7 +171,7 @@ public extension MahaCameraConfiguration {
     }
     
     @objc enum FocusMode: Int {
-        var avFocusMode: AVCaptureDevice.FocusMode {
+        var captureDeviceFocusMode: AVCaptureDevice.FocusMode {
             switch self {
             case .autoFocus:
                 return .autoFocus
@@ -185,7 +185,7 @@ public extension MahaCameraConfiguration {
     }
     
     @objc enum ExposureMode: Int {
-        var avFocusMode: AVCaptureDevice.ExposureMode {
+        var captureDeviceExposureMode: AVCaptureDevice.ExposureMode {
             switch self {
             case .autoExpose:
                 return .autoExpose

@@ -1036,8 +1036,8 @@ open class MahaCustomCamera: UIViewController {
         // UI坐标转换为摄像头坐标
         let cameraPoint = previewLayer?.captureDevicePointConverted(fromLayerPoint: point) ?? view.center
         focusCamera(
-            mode: MahaPhotoConfiguration.default().cameraConfiguration.focusMode.avFocusMode,
-            exposureMode: MahaPhotoConfiguration.default().cameraConfiguration.exposureMode.avFocusMode,
+            mode: MahaPhotoConfiguration.default().cameraConfiguration.focusMode.captureDeviceFocusMode,
+            exposureMode: MahaPhotoConfiguration.default().cameraConfiguration.exposureMode.captureDeviceExposureMode,
             point: cameraPoint
         )
     }

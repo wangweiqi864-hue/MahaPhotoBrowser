@@ -27,6 +27,16 @@
 import UIKit
 
 class MahaAlbumListCell: UITableViewCell {
+    private enum Layout {
+        static let titleHeight: CGFloat = 30
+        static let selectionIndicatorSize: CGFloat = 20
+        static let disclosureIndicatorSize = CGSize(width: 15, height: 15)
+        static let horizontalInset: CGFloat = 20
+        static let externalStyleImageInset: CGFloat = 12
+        static let itemSpacing: CGFloat = 10
+        static let imageVerticalInset: CGFloat = 2
+    }
+
     private lazy var coverImageView: UIImageView = {
         let view = UIImageView()
         view.contentMode = .scaleAspectFill
@@ -37,38 +47,38 @@ class MahaAlbumListCell: UITableViewCell {
         }
         return view
     }()
-    
+
     private lazy var titleLabel: UILabel = {
         let label = UILabel()
         label.font = .maha.font(ofSize: 17)
         label.textColor = .maha.albumListTitleColor
         return label
     }()
-    
+
     private lazy var countLabel: UILabel = {
         let label = UILabel()
         label.font = .maha.font(ofSize: 16)
         label.textColor = .maha.albumListCountColor
         return label
     }()
-    
-    private var imageIdentifier: String?
-    
+
+    private var displayedImageIdentifier: String?
+
     private var model: MahaAlbumListModel!
-    
-    private var style: MahaPhotoBrowserStyle = .embedAlbumList
-    
+
+    private var browserStyle: MahaPhotoBrowserStyle = .embedAlbumList
+
     private var indicator: UIImageView = {
         var image = UIImage.maha.getImage("zl_ablumList_arrow")
         if isRTL() {
             image = image?.imageFlippedForRightToLeftLayoutDirection()
         }
-        
+
         let view = UIImageView(image: image)
         view.contentMode = .scaleAspectFit
         return view
     }()
-    
+
     lazy var selectBtn: UIButton = {
         let btn = UIButton(type: .custom)
         btn.isUserInteractionEnabled = false
@@ -76,7 +86,7 @@ class MahaAlbumListCell: UITableViewCell {
         btn.setImage(.maha.getImage("zl_albumSelect"), for: .selected)
         return btn
     }()
-    
+
     override func awakeFromNib() {
         super.awakeFromNib()
         // Initialization code
@@ -86,105 +96,105 @@ class MahaAlbumListCell: UITableViewCell {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
         setupUI()
     }
-    
+
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-    
+
     override func layoutSubviews() {
         super.layoutSubviews()
-        
+
         let width = contentView.maha.width
         let height = contentView.maha.height
-        
-        let coverImageW = height - 4
-        let maxTitleW = width - coverImageW - 80
-        
-        var titleW: CGFloat = 0
-        var countW: CGFloat = 0
+
+        let coverImageWidth = height - Layout.imageVerticalInset * 2
+        let maxTitleWidth = width - coverImageWidth - 80
+
+        var titleWidth: CGFloat = 0
+        var countWidth: CGFloat = 0
         if let model = model {
-            titleW = min(
+            titleWidth = min(
                 bounds.width / 3 * 2,
                 model.title.maha.boundingRect(
                     font: .maha.font(ofSize: 17),
-                    limitSize: CGSize(width: CGFloat.greatestFiniteMagnitude, height: 30)
+                    limitSize: CGSize(width: CGFloat.greatestFiniteMagnitude, height: Layout.titleHeight)
                 ).width
             )
-            titleW = min(titleW, maxTitleW)
-            
-            countW = ("(" + String(model.count) + ")").maha
+            titleWidth = min(titleWidth, maxTitleWidth)
+
+            countWidth = ("(" + String(model.count) + ")").maha
                 .boundingRect(
                     font: .maha.font(ofSize: 16),
-                    limitSize: CGSize(width: CGFloat.greatestFiniteMagnitude, height: 30)
+                    limitSize: CGSize(width: CGFloat.greatestFiniteMagnitude, height: Layout.titleHeight)
                 ).width
         }
-        
+
         if isRTL() {
             let imageViewX: CGFloat
-            if style == .embedAlbumList {
-                imageViewX = width - coverImageW
+            if browserStyle == .embedAlbumList {
+                imageViewX = width - coverImageWidth
             } else {
-                imageViewX = width - coverImageW - 12
+                imageViewX = width - coverImageWidth - Layout.externalStyleImageInset
             }
-            
-            coverImageView.frame = CGRect(x: imageViewX, y: 2, width: coverImageW, height: coverImageW)
+
+            coverImageView.frame = CGRect(x: imageViewX, y: Layout.imageVerticalInset, width: coverImageWidth, height: coverImageWidth)
             titleLabel.frame = CGRect(
-                x: coverImageView.maha.left - titleW - 10,
-                y: (height - 30) / 2,
-                width: titleW,
-                height: 30
+                x: coverImageView.maha.left - titleWidth - Layout.itemSpacing,
+                y: (height - Layout.titleHeight) / 2,
+                width: titleWidth,
+                height: Layout.titleHeight
             )
-            
+
             countLabel.frame = CGRect(
-                x: titleLabel.maha.left - countW - 10,
-                y: (height - 30) / 2,
-                width: countW,
-                height: 30
+                x: titleLabel.maha.left - countWidth - Layout.itemSpacing,
+                y: (height - Layout.titleHeight) / 2,
+                width: countWidth,
+                height: Layout.titleHeight
             )
-            selectBtn.frame = CGRect(x: 20, y: (height - 20) / 2, width: 20, height: 20)
-            indicator.frame = CGRect(x: 20, y: (bounds.height - 15) / 2, width: 15, height: 15)
+            selectBtn.frame = CGRect(x: Layout.horizontalInset, y: (height - Layout.selectionIndicatorSize) / 2, width: Layout.selectionIndicatorSize, height: Layout.selectionIndicatorSize)
+            indicator.frame = CGRect(x: Layout.horizontalInset, y: (bounds.height - Layout.disclosureIndicatorSize.height) / 2, width: Layout.disclosureIndicatorSize.width, height: Layout.disclosureIndicatorSize.height)
             return
         }
-        
+
         let imageViewX: CGFloat
-        if style == .embedAlbumList {
+        if browserStyle == .embedAlbumList {
             imageViewX = 0
         } else {
-            imageViewX = 12
+            imageViewX = Layout.externalStyleImageInset
         }
-        
-        coverImageView.frame = CGRect(x: imageViewX, y: 2, width: coverImageW, height: coverImageW)
+
+        coverImageView.frame = CGRect(x: imageViewX, y: Layout.imageVerticalInset, width: coverImageWidth, height: coverImageWidth)
         titleLabel.frame = CGRect(
-            x: coverImageView.maha.right + 10,
-            y: (bounds.height - 30) / 2,
-            width: titleW,
-            height: 30
+            x: coverImageView.maha.right + Layout.itemSpacing,
+            y: (bounds.height - Layout.titleHeight) / 2,
+            width: titleWidth,
+            height: Layout.titleHeight
         )
-        countLabel.frame = CGRect(x: titleLabel.maha.right + 10, y: (height - 30) / 2, width: countW, height: 30)
-        selectBtn.frame = CGRect(x: width - 20 - 20, y: (height - 20) / 2, width: 20, height: 20)
-        indicator.frame = CGRect(x: width - 20 - 15, y: (height - 15) / 2, width: 15, height: 15)
+        countLabel.frame = CGRect(x: titleLabel.maha.right + Layout.itemSpacing, y: (height - Layout.titleHeight) / 2, width: countWidth, height: Layout.titleHeight)
+        selectBtn.frame = CGRect(x: width - Layout.horizontalInset - Layout.selectionIndicatorSize, y: (height - Layout.selectionIndicatorSize) / 2, width: Layout.selectionIndicatorSize, height: Layout.selectionIndicatorSize)
+        indicator.frame = CGRect(x: width - Layout.horizontalInset - Layout.disclosureIndicatorSize.width, y: (height - Layout.disclosureIndicatorSize.height) / 2, width: Layout.disclosureIndicatorSize.width, height: Layout.disclosureIndicatorSize.height)
     }
-    
+
     func setupUI() {
         backgroundColor = .maha.albumListBgColor
         selectionStyle = .none
         accessoryType = .none
-        
+
         contentView.addSubview(coverImageView)
         contentView.addSubview(titleLabel)
         contentView.addSubview(countLabel)
         contentView.addSubview(selectBtn)
         contentView.addSubview(indicator)
     }
-    
+
     func configureCell(model: MahaAlbumListModel, style: MahaPhotoBrowserStyle) {
         self.model = model
-        self.style = style
-        
-        titleLabel.text = self.model.title
-        countLabel.text = "(" + String(self.model.count) + ")"
-        
+        browserStyle = style
+
+        titleLabel.text = model.title
+        countLabel.text = "(" + String(model.count) + ")"
+
         if style == .embedAlbumList {
             selectBtn.isHidden = false
             indicator.isHidden = true
@@ -192,12 +202,12 @@ class MahaAlbumListCell: UITableViewCell {
             indicator.isHidden = false
             selectBtn.isHidden = true
         }
-        
-        imageIdentifier = self.model.headImageAsset?.localIdentifier
-        if let asset = self.model.headImageAsset {
+
+        displayedImageIdentifier = model.headImageAsset?.localIdentifier
+        if let asset = model.headImageAsset {
             let w = bounds.height * 2.5
             MahaPhotoManager.fetchImage(for: asset, size: CGSize(width: w, height: w)) { [weak self] image, _ in
-                if self?.imageIdentifier == self?.model.headImageAsset?.localIdentifier {
+                if self?.displayedImageIdentifier == self?.model.headImageAsset?.localIdentifier {
                     self?.coverImageView.image = image ?? .maha.getImage("zl_defaultphoto")
                 }
             }

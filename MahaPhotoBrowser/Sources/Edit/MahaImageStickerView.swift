@@ -28,16 +28,16 @@ import UIKit
 
 class MahaImageStickerView: MahaBaseStickerView {
     private let image: UIImage
-    
+
     private static let edgeInset: CGFloat = 20
-    
+
     private lazy var imageView: UIImageView = {
         let view = UIImageView(image: image)
         view.contentMode = .scaleAspectFit
         view.clipsToBounds = true
         return view
     }()
-    
+
     // Convert all states to model.
     override var state: MahaImageStickerState {
         return MahaImageStickerState(
@@ -46,16 +46,16 @@ class MahaImageStickerView: MahaBaseStickerView {
             originScale: originScale,
             originAngle: originAngle,
             originFrame: originFrame,
-            gesScale: gesScale,
-            gesRotation: gesRotation,
-            totalTranslationPoint: totalTranslationPoint
+            gesScale: currentGestureScale,
+            gesRotation: currentGestureRotation,
+            totalTranslationPoint: totalTranslation
         )
     }
-    
+
     deinit {
         mahaDebugPrint("MahaImageStickerView deinit")
     }
-    
+
     convenience init(state: MahaImageStickerState) {
         self.init(
             id: state.id,
@@ -69,7 +69,7 @@ class MahaImageStickerView: MahaBaseStickerView {
             showBorder: false
         )
     }
-    
+
     init(
         id: String = UUID().uuidString,
         image: UIImage,
@@ -92,19 +92,19 @@ class MahaImageStickerView: MahaBaseStickerView {
             totalTranslationPoint: totalTranslationPoint,
             showBorder: showBorder
         )
-        
+
         borderView.addSubview(imageView)
     }
-    
+
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-    
+
     override func setupUIFrameWhenFirstLayout() {
         imageView.frame = bounds.insetBy(dx: Self.edgeInset, dy: Self.edgeInset)
     }
-    
+
     class func calculateSize(image: UIImage, width: CGFloat) -> CGSize {
         let maxSide = width / 2
         let minSide: CGFloat = 100

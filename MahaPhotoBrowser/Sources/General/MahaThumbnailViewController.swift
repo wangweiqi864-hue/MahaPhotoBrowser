@@ -33,7 +33,7 @@ extension MahaThumbnailViewController {
         case select
         case cancel
     }
-    
+
     private enum AutoScrollDirection {
         case none
         case top
@@ -43,34 +43,38 @@ extension MahaThumbnailViewController {
 
 class MahaThumbnailViewController: UIViewController {
     private var albumList: MahaAlbumListModel?
-    
+
     private var externalNavView: MahaExternalAlbumListNavView?
-    
+
     private var embedNavView: MahaEmbedAlbumListNavView?
-    
+
     private var embedAlbumListView: MahaEmbedAlbumListView?
-    
+
     private lazy var bottomView: UIView = {
         let view = UIView()
         view.backgroundColor = .maha.bottomToolViewBgColor
         return view
     }()
-    
+
     private var bottomBlurView: UIVisualEffectView?
-    
+
     private var limitAuthTipsView: MahaLimitedAuthorityTipsView?
-    
+
+    private var photoNavigationController: MahaImageNavController? {
+        navigationController as? MahaImageNavController
+    }
+
     private lazy var previewBtn: UIButton = {
-        let btn = createBtn(localLanguageTextValue(.preview), #selector(previewBtnClick))
+        let btn = makeToolbarButton(localLanguageTextValue(.preview), #selector(previewBtnClick))
         btn.titleLabel?.lineBreakMode = .byCharWrapping
         btn.titleLabel?.numberOfLines = 2
         btn.contentHorizontalAlignment = .left
         btn.isHidden = !MahaPhotoConfiguration.default().showPreviewButtonInAlbum
         return btn
     }()
-    
+
     private lazy var originalBtn: UIButton = {
-        let btn = createBtn(localLanguageTextValue(.originalPhoto), #selector(originalPhotoClick))
+        let btn = makeToolbarButton(localLanguageTextValue(.originalPhoto), #selector(originalPhotoClick))
         btn.titleLabel?.lineBreakMode = .byCharWrapping
         btn.titleLabel?.numberOfLines = 2
         btn.contentHorizontalAlignment = .left
@@ -84,10 +88,10 @@ class MahaThumbnailViewController: UIViewController {
             btn.titleEdgeInsets = UIEdgeInsets(top: 0, left: 5, bottom: 0, right: 0)
         }
         btn.isHidden = !(MahaPhotoConfiguration.default().allowSelectOriginal && MahaPhotoConfiguration.default().allowSelectImage)
-        btn.isSelected = (navigationController as? MahaImageNavController)?.isSelectedOriginal ?? false
+        btn.isSelected = photoNavigationController?.isOriginalSelectionEnabled ?? false
         return btn
     }()
-    
+
     private lazy var originalLabel: UILabel = {
         let label = UILabel()
         label.font = .maha.font(ofSize: 12)
@@ -98,14 +102,14 @@ class MahaThumbnailViewController: UIViewController {
         label.isHidden = true
         return label
     }()
-    
+
     private lazy var doneBtn: UIButton = {
-        let btn = createBtn(localLanguageTextValue(.done), #selector(doneBtnClick), true)
+        let btn = makeToolbarButton(localLanguageTextValue(.done), #selector(doneBtnClick), isDoneButton: true)
         btn.layer.masksToBounds = true
         btn.layer.cornerRadius = MahaLayout.bottomToolBtnCornerRadius
         return btn
     }()
-    
+
     private lazy var scrollToBottomBtn: UIButton = {
         let btn = UIButton(type: .custom)
         btn.setImage(.maha.getImage("zl_arrow_down"), for: .normal)
@@ -113,42 +117,42 @@ class MahaThumbnailViewController: UIViewController {
         btn.maha.addShadow(color: .maha.rgba(35, 35, 35), radius: 5, opacity: 1, offset: CGSize(width: 0, height: 3))
         return btn
     }()
-    
+
     /// 所有滑动经过的indexPath
-    private lazy var arrSlideIndexPaths: [IndexPath] = []
-    
+    private lazy var slideSelectionIndexPaths: [IndexPath] = []
+
     /// 所有滑动经过的indexPath的初始选择状态
-    private lazy var dicOriSelectStatus: [IndexPath: Bool] = [:]
-    
+    private lazy var originalSelectionStates: [IndexPath: Bool] = [:]
+
     /// 设备旋转前最后一个可视indexPath
     private var lastVisibleIndexPathBeforeRotation: IndexPath?
-    
+
     /// 是否触发了横竖屏切换
     private var isSwitchOrientation = false
-    
+
     /// 是否开始出发滑动选择
-    private var beginPanSelect = false
-    
+    private var hasStartedSlideSelection = false
+
     /// 滑动选择 或 取消
     /// 当初始滑动的cell处于未选择状态，则开始选择，反之，则开始取消选择
-    private var panSelectType: MahaThumbnailViewController.SlideSelectType = .none
-    
+    private var slideSelectType: MahaThumbnailViewController.SlideSelectType = .none
+
     /// 开始滑动的indexPath
-    private var beginSlideIndexPath: IndexPath?
-    
+    private var slideSelectionStartIndexPath: IndexPath?
+
     /// 最后滑动经过的index，开始的indexPath不计入
     /// 优化拖动手势计算，避免单个cell中冗余计算多次
-    private var lastSlideIndex: Int?
-    
+    private var lastSlideSelectedIndex: Int?
+
     /// 拍照后置为true，需要刷新相册列表
     private var hasTakeANewAsset = false
-    
-    private var slideCalculateQueue = DispatchQueue(label: "com.MahahotoBrowser.slide")
-    
+
+    private var slideSelectionQueue = DispatchQueue(label: "com.MahahotoBrowser.slide")
+
     private var autoScrollTimer: CADisplayLink?
-    
+
     private var lastPanUpdateTime = CACurrentMediaTime()
-    
+
     private var showLimitAuthTipsView: Bool {
         if #available(iOS 14.0, *),
            PHPhotoLibrary.maha.authStatus(for: .readWrite) == .limited,
@@ -158,29 +162,29 @@ class MahaThumbnailViewController: UIViewController {
             return false
         }
     }
-    
+
     private var autoScrollInfo: (direction: AutoScrollDirection, speed: CGFloat) = (.none, 0)
-    
+
     /// 照相按钮+添加图片按钮的数量
     /// the count of addPhotoButton & cameraButton
     private var offset: Int {
         if #available(iOS 14, *) {
-            return showAddPhotoCell.maha.intValue + showCameraCell.maha.intValue
+            return shouldShowAddPhotoCell.maha.intValue + shouldShowCameraCell.maha.intValue
         } else {
-            return showCameraCell.maha.intValue
+            return shouldShowCameraCell.maha.intValue
         }
     }
-    
+
     private lazy var panGes: UIPanGestureRecognizer = {
-        let pan = UIPanGestureRecognizer(target: self, action: #selector(slideSelectAction(_:)))
+        let pan = UIPanGestureRecognizer(target: self, action: #selector(handleSlideSelection(_:)))
         pan.delegate = self
         return pan
     }()
-    
+
     lazy var collectionView: UICollectionView = {
         let layout = MahaCollectionViewFlowLayout()
         layout.sectionInset = UIEdgeInsets(top: 3, left: 0, bottom: 3, right: 0)
-        
+
         let view = UICollectionView(frame: .zero, collectionViewLayout: layout)
         view.backgroundColor = .maha.thumbnailBgColor
         view.dataSource = self
@@ -192,66 +196,66 @@ class MahaThumbnailViewController: UIViewController {
         MahaCameraCell.maha.register(view)
         MahaThumbnailPhotoCell.maha.register(view)
         MahaAddPhotoCell.maha.register(view)
-        
+
         return view
     }()
-    
+
     var noAuthTipsView: MahaNoAuthTipsView?
-    
-    var arrDataSources: [MahaPhotoModel] = []
-    
-    var showCameraCell: Bool {
+
+    var photoModels: [MahaPhotoModel] = []
+
+    var shouldShowCameraCell: Bool {
         if MahaPhotoConfiguration.default().allowTakePhotoInLibrary, albumList?.isCameraRoll == true {
             return true
         }
         return false
     }
-    
+
     @available(iOS 14, *)
-    var showAddPhotoCell: Bool {
+    var shouldShowAddPhotoCell: Bool {
         PHPhotoLibrary.maha.authStatus(for: .readWrite) == .limited
             && MahaPhotoUIConfiguration.default().showAddPhotoButton
             && (albumList?.isCameraRoll ?? false)
     }
-    
+
     private var hiddenStatusBar = false {
         didSet {
             setNeedsStatusBarAppearanceUpdate()
         }
     }
-    
+
     private var didLayout = false
-    
+
     override var prefersStatusBarHidden: Bool { hiddenStatusBar }
-    
+
     override var preferredStatusBarStyle: UIStatusBarStyle {
         MahaPhotoUIConfiguration.default().statusBarStyle
     }
-    
+
     deinit {
         mahaDebugPrint("MahaThumbnailViewController deinit")
-        cleanTimer()
+        invalidateAutoScrollTimer()
     }
-    
+
     init(albumList: MahaAlbumListModel?) {
         self.albumList = albumList
         super.init(nibName: nil, bundle: nil)
     }
-    
+
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-    
+
     override func viewDidLoad() {
         super.viewDidLoad()
 
         setupUI()
-        
+
         if MahaPhotoConfiguration.default().allowSlideSelect {
             view.addGestureRecognizer(panGes)
         }
-        
+
         let status = PHPhotoLibrary.maha.authStatus(for: .readWrite)
         if status == .restricted || status == .denied {
             showNoAuthTipsView()
@@ -269,39 +273,39 @@ class MahaThumbnailViewController: UIViewController {
             fetchCameraRollAlbumIfNeed()
         }
     }
-    
+
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         navigationController?.navigationBar.isHidden = true
         collectionView.reloadItems(at: collectionView.indexPathsForVisibleItems)
-        resetBottomToolBtnStatus()
+        refreshBottomToolbarState()
     }
-    
+
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        
+
         updateScrollToBottomVisibility()
-        
+
         if hiddenStatusBar {
             hiddenStatusBar = false
         }
     }
-    
+
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
-        
+
         // 如果预览界面不显示状态栏，这里隐藏下状态栏，使下拉返回动画期间状态栏不至于闪烁
         if !MahaPhotoUIConfiguration.default().showStatusBarInPreviewInterface {
             hiddenStatusBar = true
         }
     }
-    
+
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         didLayout = true
-        
+
         let navViewNormalH: CGFloat = 44
-        
+
         var insets = UIEdgeInsets(top: 20, left: 0, bottom: 0, right: 0)
         var collectionViewInsetTop: CGFloat = 20
         if #available(iOS 11.0, *), deviceIsFringeScreen() {
@@ -310,15 +314,15 @@ class MahaThumbnailViewController: UIViewController {
         } else {
             collectionViewInsetTop += navViewNormalH
         }
-        
+
         let navViewFrame = CGRect(x: 0, y: 0, width: view.frame.width, height: insets.top + navViewNormalH)
         externalNavView?.frame = navViewFrame
         embedNavView?.frame = navViewFrame
-        
+
         embedAlbumListView?.frame = CGRect(x: 0, y: navViewFrame.maxY, width: view.bounds.width, height: view.bounds.height - navViewFrame.maxY)
-        
+
         let showBottomToolBtns = shouldShowBottomToolBar()
-        
+
         let bottomViewH: CGFloat
         if showLimitAuthTipsView, showBottomToolBtns {
             bottomViewH = MahaLayout.bottomToolViewH + MahaLimitedAuthorityTipsView.height
@@ -329,7 +333,7 @@ class MahaThumbnailViewController: UIViewController {
         } else {
             bottomViewH = 0
         }
-        
+
         if let noAuthTipsView {
             noAuthTipsView.frame = CGRect(
                 x: 0,
@@ -338,7 +342,7 @@ class MahaThumbnailViewController: UIViewController {
                 height: view.maha.height - navViewFrame.height - bottomViewH - insets.bottom
             )
         }
-        
+
         let totalWidth = view.maha.width - insets.left - insets.right
         // 非刘海屏，在下拉返回动画时候，状态栏的隐藏和显示之间的切换会导致Collectionview的抖动，这里给个Y值，避开状态栏
         let collectionViewY = deviceIsFringeScreen() ? 0 : insets.top
@@ -361,31 +365,31 @@ class MahaThumbnailViewController: UIViewController {
 
         if isSwitchOrientation {
             isSwitchOrientation = false
-            
+
             if let lastVisibleIndexPathBeforeRotation {
                 collectionView.scrollToItem(at: lastVisibleIndexPathBeforeRotation, at: .bottom, animated: false)
             }
         }
-        
+
         guard showBottomToolBtns || showLimitAuthTipsView else { return }
-        
+
         let btnH = MahaLayout.bottomToolBtnH
-        
+
         bottomView.frame = CGRect(x: 0, y: view.frame.height - insets.bottom - bottomViewH, width: view.bounds.width, height: bottomViewH + insets.bottom)
         bottomBlurView?.frame = bottomView.bounds
-        
+
         if showLimitAuthTipsView {
             limitAuthTipsView?.frame = CGRect(x: 0, y: 0, width: bottomView.bounds.width, height: MahaLimitedAuthorityTipsView.height)
         }
-        
+
         if showBottomToolBtns {
             let btnMaxWidth = (bottomView.bounds.width - 30) / 3
-            
+
             let btnY = showLimitAuthTipsView ? MahaLimitedAuthorityTipsView.height + MahaLayout.bottomToolBtnY : MahaLayout.bottomToolBtnY
             let previewTitle = localLanguageTextValue(.preview)
             let previewBtnW = previewTitle.maha.boundingRect(font: MahaLayout.bottomToolTitleFont, limitSize: CGSize(width: CGFloat.greatestFiniteMagnitude, height: 30)).width
             previewBtn.frame = CGRect(x: 15, y: btnY, width: min(btnMaxWidth, previewBtnW), height: btnH)
-            
+
             let originalTitle = localLanguageTextValue(.originalPhoto)
             let originBtnW = originalTitle.maha.boundingRect(
                 font: MahaLayout.bottomToolTitleFont,
@@ -396,7 +400,7 @@ class MahaThumbnailViewController: UIViewController {
             ).width + (originalBtn.currentImage?.size.width ?? 19) + 12
             let originBtnMaxW = min(btnMaxWidth, originBtnW)
             originalBtn.frame = CGRect(x: (bottomView.maha.width - originBtnMaxW) / 2 - 5, y: btnY, width: originBtnMaxW, height: btnH)
-            
+
             let originalLabelH = originalLabel.font.lineHeight
             let originalLabelY = min(originalBtn.maha.bottom, bottomView.maha.height - originalLabelH)
             originalLabel.frame = CGRect(
@@ -405,56 +409,56 @@ class MahaThumbnailViewController: UIViewController {
                 width: btnMaxWidth,
                 height: originalLabelH
             )
-            
-            refreshDoneBtnFrame()
+
+            updateDoneButtonFrame()
         }
     }
-    
+
     override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
         super.viewWillTransition(to: size, with: coordinator)
-        
+
         lastVisibleIndexPathBeforeRotation = collectionView.indexPathsForVisibleItems
             .max { $0.row < $1.row }
         isSwitchOrientation = true
         collectionView.collectionViewLayout.invalidateLayout()
     }
-    
+
     private func setupUI() {
         automaticallyAdjustsScrollViewInsets = true
         edgesForExtendedLayout = .all
         view.backgroundColor = .maha.thumbnailBgColor
-        
+
         view.addSubview(collectionView)
         view.addSubview(bottomView)
         view.addSubview(scrollToBottomBtn)
-        
+
         if let effect = MahaPhotoUIConfiguration.default().bottomViewBlurEffectOfAlbumList {
             bottomBlurView = UIVisualEffectView(effect: effect)
             bottomView.addSubview(bottomBlurView!)
         }
-        
+
         bottomView.addSubview(previewBtn)
         bottomView.addSubview(originalLabel)
         bottomView.addSubview(originalBtn)
         bottomView.addSubview(doneBtn)
-        
+
         setupNavView()
     }
-    
+
     private func showNoAuthTipsView() {
         noAuthTipsView = MahaNoAuthTipsView(frame: view.bounds)
         view.addSubview(noAuthTipsView!)
-        
+
         if didLayout {
             view.setNeedsLayout()
             view.layoutIfNeeded()
         }
     }
-    
+
     private func setupNavView() {
         if MahaPhotoUIConfiguration.default().style == .embedAlbumList {
             embedNavView = MahaEmbedAlbumListNavView(title: albumList?.title ?? "")
-            
+
             embedNavView?.selectAlbumBlock = { [weak self] in
                 if self?.embedAlbumListView?.isHidden == true {
                     self?.embedAlbumListView?.show(reloadAlbumList: self?.hasTakeANewAsset ?? false)
@@ -463,32 +467,32 @@ class MahaThumbnailViewController: UIViewController {
                     self?.embedAlbumListView?.hide()
                 }
             }
-            
+
             embedNavView?.cancelBlock = { [weak self] in
                 let nav = self?.navigationController as? MahaImageNavController
                 nav?.dismiss(animated: true, completion: {
-                    nav?.cancelBlock?()
+                    nav?.cancelHandler?()
                 })
             }
-            
+
             view.addSubview(embedNavView!)
         } else if MahaPhotoUIConfiguration.default().style == .externalAlbumList {
             externalNavView = MahaExternalAlbumListNavView(title: albumList?.title ?? "")
-            
+
             externalNavView?.backBlock = { [weak self] in
                 self?.navigationController?.popViewController(animated: true)
             }
-            
+
             externalNavView?.cancelBlock = { [weak self] in
                 let nav = self?.navigationController as? MahaImageNavController
-                nav?.cancelBlock?()
+                nav?.cancelHandler?()
                 nav?.dismiss(animated: true, completion: nil)
             }
-            
+
             view.addSubview(externalNavView!)
         }
     }
-    
+
     /// 获取到相册后刷新导航
     private func refreshSubviewAfterRequestAuth() {
         if showLimitAuthTipsView {
@@ -497,16 +501,16 @@ class MahaThumbnailViewController: UIViewController {
             view.setNeedsLayout()
             view.layoutIfNeeded()
         }
-        
+
         guard MahaPhotoUIConfiguration.default().style == .embedAlbumList else {
             externalNavView?.title = albumList?.title ?? ""
             return
         }
-        
+
         embedNavView?.title = albumList?.title ?? ""
         embedAlbumListView = MahaEmbedAlbumListView(selectedAlbum: albumList)
         embedAlbumListView?.isHidden = true
-        
+
         embedAlbumListView?.selectAlbumBlock = { [weak self] album in
             guard self?.albumList != album else {
                 return
@@ -516,30 +520,30 @@ class MahaThumbnailViewController: UIViewController {
             self?.loadPhotos()
             self?.embedNavView?.reset()
         }
-        
+
         embedAlbumListView?.hideBlock = { [weak self] in
             self?.embedNavView?.reset()
         }
-        
+
         view.addSubview(embedAlbumListView!)
     }
-    
-    private func createBtn(_ title: String, _ action: Selector, _ isDone: Bool = false) -> UIButton {
-        let btn = UIButton(type: .custom)
-        btn.titleLabel?.font = MahaLayout.bottomToolTitleFont
-        btn.setTitle(title, for: .normal)
-        btn.setTitleColor(
-            isDone ? .maha.bottomToolViewDoneBtnNormalTitleColor : .maha.bottomToolViewBtnNormalTitleColor,
+
+    private func makeToolbarButton(_ title: String, _ action: Selector, isDoneButton: Bool = false) -> UIButton {
+        let button = UIButton(type: .custom)
+        button.titleLabel?.font = MahaLayout.bottomToolTitleFont
+        button.setTitle(title, for: .normal)
+        button.setTitleColor(
+            isDoneButton ? .maha.bottomToolViewDoneBtnNormalTitleColor : .maha.bottomToolViewBtnNormalTitleColor,
             for: .normal
         )
-        btn.setTitleColor(
-            isDone ? .maha.bottomToolViewDoneBtnDisableTitleColor : .maha.bottomToolViewBtnDisableTitleColor,
+        button.setTitleColor(
+            isDoneButton ? .maha.bottomToolViewDoneBtnDisableTitleColor : .maha.bottomToolViewBtnDisableTitleColor,
             for: .disabled
         )
-        btn.addTarget(self, action: action, for: .touchUpInside)
-        return btn
+        button.addTarget(self, action: action, for: .touchUpInside)
+        return button
     }
-    
+
     private func fetchCameraRollAlbumIfNeed() {
         if albumList != nil {
             refreshSubviewAfterRequestAuth()
@@ -555,41 +559,40 @@ class MahaThumbnailViewController: UIViewController {
                 self?.loadPhotos()
             }
         }
-        
+
         // Register for the album change notification when the status is limited, because the photoLibraryDidChange method will be repeated multiple times each time the album changes, causing the interface to refresh multiple times. So the album changes are not monitored in other authority.
         if #available(iOS 14.0, *), PHPhotoLibrary.maha.authStatus(for: .readWrite) == .limited {
             PHPhotoLibrary.shared().register(self)
         }
     }
-    
+
     private func loadPhotos() {
-        guard let nav = navigationController as? MahaImageNavController, let albumList else {
+        guard let navigationController = photoNavigationController, let albumList else {
             return
         }
-        
+
         let hud = MahaProgressHUD.show(in: view)
-        
+
         DispatchQueue.global().async {
-            var datas: [MahaPhotoModel] = []
-            
+            var loadedModels: [MahaPhotoModel] = []
+
             if albumList.models.isEmpty {
                 albumList.refetchPhotos()
-                
-                datas.append(contentsOf: albumList.models)
-                markSelected(source: &datas, selected: &nav.arrSelectedModels)
+
+                loadedModels.append(contentsOf: albumList.models)
+                markSelected(source: &loadedModels, selected: &navigationController.selectedPhotoModels)
             } else {
-                datas.append(contentsOf: albumList.models)
-                markSelected(source: &datas, selected: &nav.arrSelectedModels)
+                loadedModels.append(contentsOf: albumList.models)
+                markSelected(source: &loadedModels, selected: &navigationController.selectedPhotoModels)
             }
-            
+
             MahaMainAsync {
                 hud.hide()
-                
-                self.arrDataSources.removeAll()
-                self.arrDataSources.append(contentsOf: datas)
+
+                self.photoModels = loadedModels
                 self.collectionView.reloadData()
-                self.scrollToTopOrBottom()
-                
+                self.scrollToInitialPosition()
+
                 self.scrollToBottomBtn.alpha = 0
                 var transform = CGAffineTransform(scaleX: 0.5, y: 0.5)
                 if !MahaPhotoUIConfiguration.default().sortAscending {
@@ -599,7 +602,7 @@ class MahaThumbnailViewController: UIViewController {
             }
         }
     }
-    
+
     private func shouldShowBottomToolBar() -> Bool {
         let config = MahaPhotoConfiguration.default()
         let condition1 = config.editAfterSelectThumbnailImage &&
@@ -612,17 +615,17 @@ class MahaThumbnailViewController: UIViewController {
         }
         return true
     }
-    
+
     private func updateScrollToBottomVisibility() {
         let config = MahaPhotoUIConfiguration.default()
         guard config.showScrollToBottomBtn else {
             scrollToBottomBtn.isHidden = true
             return
         }
-        
+
         let flag = collectionView.maha.height / 2
         var transform: CGAffineTransform = .identity
-        
+
         let shouldShow: Bool
         if config.sortAscending {
             let maxOffsetY = collectionView.contentSize.height + collectionView.maha.contentInset.bottom - collectionView.maha.height
@@ -632,50 +635,50 @@ class MahaThumbnailViewController: UIViewController {
             shouldShow = collectionView.maha.contentInset.top + collectionView.contentOffset.y >= flag
             transform = transform.rotated(by: .pi)
         }
-        
+
         if (shouldShow && scrollToBottomBtn.alpha == 1) ||
             (!shouldShow && scrollToBottomBtn.alpha == 0) {
             return
         }
-        
+
         UIView.animate(withDuration: 0.3, delay: 0, options: [.beginFromCurrentState]) {
             self.scrollToBottomBtn.alpha = shouldShow ? 1 : 0
             self.scrollToBottomBtn.transform = shouldShow ? transform : transform.scaledBy(x: 0.5, y: 0.5)
         }
     }
-    
+
     // MARK: btn actions
-    
+
     @objc private func previewBtnClick() {
-        guard let nav = navigationController as? MahaImageNavController else {
+        guard let navigationController = photoNavigationController else {
             zlLoggerInDebug("Navigation controller is null")
             return
         }
-        let vc = MahaPhotoPreviewController(photos: nav.arrSelectedModels, index: 0)
+        let vc = MahaPhotoPreviewController(photos: navigationController.selectedPhotoModels, index: 0)
         vc.backBlock = { [weak self] in
             guard let `self` = self, self.hiddenStatusBar else { return }
             self.hiddenStatusBar = false
         }
         show(vc, sender: nil)
     }
-    
+
     @objc private func originalPhotoClick() {
         originalBtn.isSelected.toggle()
-        refreshOriginalLabelText()
-        (navigationController as? MahaImageNavController)?.isSelectedOriginal = originalBtn.isSelected
+        updateOriginalLabelText()
+        photoNavigationController?.isOriginalSelectionEnabled = originalBtn.isSelected
     }
-    
+
     @objc private func doneBtnClick() {
-        let nav = navigationController as? MahaImageNavController
+        let navigationController = photoNavigationController
         if let block = MahaPhotoConfiguration.default().operateBeforeDoneAction {
-            block(self) { [weak nav] in
-                nav?.selectImageBlock?()
+            block(self) { [weak navigationController] in
+                navigationController?.selectPhotosHandler?()
             }
         } else {
-            nav?.selectImageBlock?()
+            navigationController?.selectPhotosHandler?()
         }
     }
-    
+
     @objc private func scrollToBottomBtnClick() {
         if MahaPhotoUIConfiguration.default().sortAscending {
             collectionView.maha.scrollToBottom()
@@ -683,178 +686,178 @@ class MahaThumbnailViewController: UIViewController {
             collectionView.maha.scrollToTop()
         }
     }
-    
-    @objc private func slideSelectAction(_ pan: UIPanGestureRecognizer) {
+
+    @objc private func handleSlideSelection(_ pan: UIPanGestureRecognizer) {
         if pan.state == .ended || pan.state == .cancelled {
             stopAutoScroll()
-            beginPanSelect = false
-            panSelectType = .none
-            arrSlideIndexPaths.removeAll()
-            dicOriSelectStatus.removeAll()
-            resetBottomToolBtnStatus()
+            hasStartedSlideSelection = false
+            slideSelectType = .none
+            slideSelectionIndexPaths.removeAll()
+            originalSelectionStates.removeAll()
+            refreshBottomToolbarState()
             return
         }
-        
+
         let point = pan.location(in: collectionView)
         guard let indexPath = collectionView.indexPathForItem(at: point),
-              let nav = navigationController as? MahaImageNavController else {
+              let navigationController = photoNavigationController else {
             return
         }
-        
+
         let config = MahaPhotoConfiguration.default()
         let cell = collectionView.cellForItem(at: indexPath) as? MahaThumbnailPhotoCell
-        let asc = MahaPhotoUIConfiguration.default().sortAscending
-        
+        let isSortAscending = MahaPhotoUIConfiguration.default().sortAscending
+
         if pan.state == .began {
-            beginPanSelect = cell != nil
-            
-            if beginPanSelect {
-                let index = asc ? indexPath.row : indexPath.row - offset
-                
-                let m = arrDataSources[index]
-                panSelectType = m.isSelected ? .cancel : .select
-                beginSlideIndexPath = indexPath
-                
-                if !m.isSelected {
-                    if nav.arrSelectedModels.count >= config.maxSelectCount {
-                        panSelectType = .none
+            hasStartedSlideSelection = cell != nil
+
+            if hasStartedSlideSelection {
+                let index = isSortAscending ? indexPath.row : indexPath.row - offset
+
+                let model = photoModels[index]
+                slideSelectType = model.isSelected ? .cancel : .select
+                slideSelectionStartIndexPath = indexPath
+
+                if !model.isSelected {
+                    if navigationController.selectedPhotoModels.count >= config.maxSelectCount {
+                        slideSelectType = .none
                         return
                     }
-                    
-                    if !(cell?.enableSelect ?? true) || !canAddModel(m, currentSelectCount: nav.arrSelectedModels.count, sender: self) {
-                        panSelectType = .none
+
+                    if !(cell?.enableSelect ?? true) || !canAddModel(model, currentSelectCount: navigationController.selectedPhotoModels.count, sender: self) {
+                        slideSelectType = .none
                         return
                     }
-                    
-                    if shouldDirectEdit(m) {
-                        panSelectType = .none
+
+                    if shouldDirectEdit(model) {
+                        slideSelectType = .none
                         return
                     } else {
-                        m.isSelected = true
-                        nav.arrSelectedModels.append(m)
-                        config.didSelectAsset?(m.asset)
+                        model.isSelected = true
+                        navigationController.selectedPhotoModels.append(model)
+                        config.didSelectAsset?(model.asset)
                     }
-                } else if m.isSelected {
-                    m.isSelected = false
-                    nav.arrSelectedModels.removeAll { $0 == m }
-                    config.didDeselectAsset?(m.asset)
+                } else if model.isSelected {
+                    model.isSelected = false
+                    navigationController.selectedPhotoModels.removeAll { $0 == model }
+                    config.didDeselectAsset?(model.asset)
                 }
-                
-                cell?.btnSelect.isSelected = m.isSelected
+
+                cell?.btnSelect.isSelected = model.isSelected
                 refreshCellIndexAndMaskView()
-                resetBottomToolBtnStatus()
-                lastSlideIndex = indexPath.row
+                refreshBottomToolbarState()
+                lastSlideSelectedIndex = indexPath.row
             }
         } else if pan.state == .changed {
-            if !beginPanSelect || indexPath.row == lastSlideIndex || panSelectType == .none || cell == nil {
+            if !hasStartedSlideSelection || indexPath.row == lastSlideSelectedIndex || slideSelectType == .none || cell == nil {
                 return
             }
-            
+
             autoScrollWhenSlideSelect(pan)
-            
-            guard let beginIndexPath = beginSlideIndexPath else {
+
+            guard let beginIndexPath = slideSelectionStartIndexPath else {
                 return
             }
             lastPanUpdateTime = CACurrentMediaTime()
-            
+
             let visiblePaths = collectionView.indexPathsForVisibleItems
-            slideCalculateQueue.async {
-                self.lastSlideIndex = indexPath.row
+            slideSelectionQueue.async {
+                self.lastSlideSelectedIndex = indexPath.row
                 let minIndex = min(indexPath.row, beginIndexPath.row)
                 let maxIndex = max(indexPath.row, beginIndexPath.row)
                 let minIsBegin = minIndex == beginIndexPath.row
-                
+
                 var i = beginIndexPath.row
                 while minIsBegin ? i <= maxIndex : i >= minIndex {
                     if i != beginIndexPath.row {
-                        let p = IndexPath(row: i, section: 0)
-                        if !self.arrSlideIndexPaths.contains(p) {
-                            self.arrSlideIndexPaths.append(p)
-                            let index = asc ? i : i - self.offset
-                            let m = self.arrDataSources[index]
-                            self.dicOriSelectStatus[p] = m.isSelected
+                        let path = IndexPath(row: i, section: 0)
+                        if !self.slideSelectionIndexPaths.contains(path) {
+                            self.slideSelectionIndexPaths.append(path)
+                            let index = isSortAscending ? i : i - self.offset
+                            let model = self.photoModels[index]
+                            self.originalSelectionStates[path] = model.isSelected
                         }
                     }
                     i += (minIsBegin ? 1 : -1)
                 }
-                
+
                 var selectedArrHasChange = false
-                
-                for path in self.arrSlideIndexPaths {
+
+                for path in self.slideSelectionIndexPaths {
                     if !visiblePaths.contains(path) {
                         continue
                     }
-                    let index = asc ? path.row : path.row - self.offset
+                    let index = isSortAscending ? path.row : path.row - self.offset
                     // 是否在最初和现在的间隔区间内
                     let inSection = path.row >= minIndex && path.row <= maxIndex
-                    let m = self.arrDataSources[index]
-                    
+                    let model = self.photoModels[index]
+
                     if inSection {
-                        if self.panSelectType == .select {
-                            if !m.isSelected,
-                               canAddModel(m, currentSelectCount: nav.arrSelectedModels.count, sender: self, showAlert: false) {
-                                m.isSelected = true
+                        if self.slideSelectType == .select {
+                            if !model.isSelected,
+                               canAddModel(model, currentSelectCount: navigationController.selectedPhotoModels.count, sender: self, showAlert: false) {
+                                model.isSelected = true
                             }
-                        } else if self.panSelectType == .cancel {
-                            m.isSelected = false
+                        } else if self.slideSelectType == .cancel {
+                            model.isSelected = false
                         }
                     } else {
                         // 未在区间内的model还原为初始选择状态
-                        m.isSelected = self.dicOriSelectStatus[path] ?? false
+                        model.isSelected = self.originalSelectionStates[path] ?? false
                     }
-                    
-                    if !m.isSelected {
-                        if let index = nav.arrSelectedModels.firstIndex(where: { $0 == m }) {
-                            nav.arrSelectedModels.remove(at: index)
+
+                    if !model.isSelected {
+                        if let selectedIndex = navigationController.selectedPhotoModels.firstIndex(where: { $0 == model }) {
+                            navigationController.selectedPhotoModels.remove(at: selectedIndex)
                             selectedArrHasChange = true
-                            
+
                             MahaMainAsync {
-                                config.didDeselectAsset?(m.asset)
+                                config.didDeselectAsset?(model.asset)
                             }
                         }
                     } else {
-                        if !nav.arrSelectedModels.contains(where: { $0 == m }) {
-                            nav.arrSelectedModels.append(m)
+                        if !navigationController.selectedPhotoModels.contains(where: { $0 == model }) {
+                            navigationController.selectedPhotoModels.append(model)
                             selectedArrHasChange = true
-                            
+
                             MahaMainAsync {
-                                config.didSelectAsset?(m.asset)
+                                config.didSelectAsset?(model.asset)
                             }
                         }
                     }
-                    
+
                     MahaMainAsync {
                         let c = self.collectionView.cellForItem(at: path) as? MahaThumbnailPhotoCell
-                        c?.btnSelect.isSelected = m.isSelected
+                        c?.btnSelect.isSelected = model.isSelected
                     }
                 }
-                
+
                 if selectedArrHasChange {
                     MahaMainAsync {
                         self.refreshCellIndexAndMaskView()
-                        self.resetBottomToolBtnStatus()
+                        self.refreshBottomToolbarState()
                     }
                 }
             }
         }
     }
-    
+
     private func autoScrollWhenSlideSelect(_ pan: UIPanGestureRecognizer) {
         guard MahaPhotoConfiguration.default().autoScrollWhenSlideSelectIsActive else {
             return
         }
-        let arrSel = (navigationController as? MahaImageNavController)?.arrSelectedModels ?? []
-        guard arrSel.count < MahaPhotoConfiguration.default().maxSelectCount else {
+        let selectedModels = photoNavigationController?.selectedPhotoModels ?? []
+        guard selectedModels.count < MahaPhotoConfiguration.default().maxSelectCount else {
             // Stop auto scroll when reach the max select count.
             stopAutoScroll()
             return
         }
-        
+
         let top = ((embedNavView?.frame.height ?? externalNavView?.frame.height) ?? 44) + 30
         let bottom = bottomView.frame.minY - 30
-        
+
         let point = pan.location(in: view)
-        
+
         var diff: CGFloat = 0
         var direction: AutoScrollDirection = .none
         if point.y < top {
@@ -867,31 +870,31 @@ class MahaThumbnailViewController: UIViewController {
             stopAutoScroll()
             return
         }
-        
+
         guard diff > 0 else { return }
-        
+
         let s = min(diff, 60) / 60 * MahaPhotoConfiguration.default().autoScrollMaxSpeed
-        
+
         autoScrollInfo = (direction, s)
-        
+
         if autoScrollTimer == nil {
-            cleanTimer()
+            invalidateAutoScrollTimer()
             autoScrollTimer = CADisplayLink(target: MahaWeakProxy(target: self), selector: #selector(autoScrollAction))
             autoScrollTimer?.add(to: RunLoop.current, forMode: .common)
         }
     }
-    
-    private func cleanTimer() {
+
+    private func invalidateAutoScrollTimer() {
         autoScrollTimer?.remove(from: RunLoop.current, forMode: .common)
         autoScrollTimer?.invalidate()
         autoScrollTimer = nil
     }
-    
+
     private func stopAutoScroll() {
         autoScrollInfo = (.none, 0)
-        cleanTimer()
+        invalidateAutoScrollTimer()
     }
-    
+
     @objc private func autoScrollAction() {
         guard autoScrollInfo.direction != .none, panGes.state != .possible else {
             stopAutoScroll()
@@ -900,7 +903,7 @@ class MahaThumbnailViewController: UIViewController {
         let duration = CGFloat(autoScrollTimer?.duration ?? 1 / 60)
         if CACurrentMediaTime() - lastPanUpdateTime > 0.2 {
             // Finger may be not moved in slide selection mode
-            slideSelectAction(panGes)
+            handleSlideSelection(panGes)
         }
         let distance = autoScrollInfo.speed * duration
         let offset = collectionView.contentOffset
@@ -911,19 +914,19 @@ class MahaThumbnailViewController: UIViewController {
             collectionView.contentOffset = CGPoint(x: 0, y: offset.y + distance)
         }
     }
-    
-    private func resetBottomToolBtnStatus() {
+
+    private func refreshBottomToolbarState() {
         guard shouldShowBottomToolBar() else { return }
-        guard let nav = navigationController as? MahaImageNavController else {
+        guard let navigationController = photoNavigationController else {
             zlLoggerInDebug("Navigation controller is null")
             return
         }
         var doneTitle = localLanguageTextValue(.done)
         if MahaPhotoConfiguration.default().showSelectCountOnDoneBtn,
-           !nav.arrSelectedModels.isEmpty {
-            doneTitle += "(" + String(nav.arrSelectedModels.count) + ")"
+           !navigationController.selectedPhotoModels.isEmpty {
+            doneTitle += "(" + String(navigationController.selectedPhotoModels.count) + ")"
         }
-        if !nav.arrSelectedModels.isEmpty {
+        if !navigationController.selectedPhotoModels.isEmpty {
             previewBtn.isEnabled = true
             doneBtn.isEnabled = true
             doneBtn.setTitle(doneTitle, for: .normal)
@@ -934,60 +937,60 @@ class MahaThumbnailViewController: UIViewController {
             doneBtn.setTitle(doneTitle, for: .normal)
             doneBtn.backgroundColor = .maha.bottomToolViewBtnDisableBgColor
         }
-        originalBtn.isSelected = nav.isSelectedOriginal
-        refreshOriginalLabelText()
-        refreshDoneBtnFrame()
+        originalBtn.isSelected = navigationController.isOriginalSelectionEnabled
+        updateOriginalLabelText()
+        updateDoneButtonFrame()
     }
-    
-    private func refreshOriginalLabelText() {
+
+    private func updateOriginalLabelText() {
         guard MahaPhotoConfiguration.default().showOriginalSizeWhenSelectOriginal else {
             return
         }
-        
+
         guard originalBtn.isSelected else {
             originalLabel.isHidden = true
             return
         }
-        
-        let selectModels = (navigationController as? MahaImageNavController)?.arrSelectedModels ?? []
-        if selectModels.isEmpty {
+
+        let selectedModels = photoNavigationController?.selectedPhotoModels ?? []
+        if selectedModels.isEmpty {
             originalLabel.isHidden = true
         } else {
             originalLabel.isHidden = false
-            let totalSize = selectModels.reduce(into: 0) { $0 += ($1.dataSize ?? 0) * 1024 }
-            let str = ByteCountFormatter.string(fromByteCount: Int64(totalSize), countStyle: .binary).replacingOccurrences(of: " ", with: "")
-            originalLabel.text = localLanguageTextValue(.originalTotalSize) + " \(str)"
+            let totalSize = selectedModels.reduce(into: 0) { $0 += ($1.dataSize ?? 0) * 1024 }
+            let totalSizeText = ByteCountFormatter.string(fromByteCount: Int64(totalSize), countStyle: .binary).replacingOccurrences(of: " ", with: "")
+            originalLabel.text = localLanguageTextValue(.originalTotalSize) + " \(totalSizeText)"
         }
     }
-    
-    private func refreshDoneBtnFrame() {
-        let doneBtnW = (doneBtn.currentTitle ?? "")
+
+    private func updateDoneButtonFrame() {
+        let doneButtonWidth = (doneBtn.currentTitle ?? "")
             .maha.boundingRect(
                 font: MahaLayout.bottomToolTitleFont,
                 limitSize: CGSize(width: CGFloat.greatestFiniteMagnitude, height: 30)
             ).width + 20
-        
-        let btnY = showLimitAuthTipsView ? MahaLimitedAuthorityTipsView.height + MahaLayout.bottomToolBtnY : MahaLayout.bottomToolBtnY
-        doneBtn.frame = CGRect(x: bottomView.bounds.width - doneBtnW - 15, y: btnY, width: doneBtnW, height: MahaLayout.bottomToolBtnH)
+
+        let buttonY = showLimitAuthTipsView ? MahaLimitedAuthorityTipsView.height + MahaLayout.bottomToolBtnY : MahaLayout.bottomToolBtnY
+        doneBtn.frame = CGRect(x: bottomView.bounds.width - doneButtonWidth - 15, y: buttonY, width: doneButtonWidth, height: MahaLayout.bottomToolBtnH)
     }
-    
-    private func scrollToTopOrBottom() {
-        guard !arrDataSources.isEmpty else {
+
+    private func scrollToInitialPosition() {
+        guard !photoModels.isEmpty else {
             return
         }
-        
+
         if MahaPhotoUIConfiguration.default().sortAscending {
-            let index = arrDataSources.count - 1 + offset
+            let index = photoModels.count - 1 + offset
             collectionView.scrollToItem(at: IndexPath(row: index, section: 0), at: .centeredVertically, animated: false)
         } else {
             collectionView.scrollToItem(at: IndexPath(row: 0, section: 0), at: .centeredVertically, animated: false)
         }
     }
-    
+
     private func showCamera() {
         let config = MahaPhotoConfiguration.default()
         guard config.canEnterCamera?() ?? true else { return }
-        
+
         if config.useCustomCamera {
             let camera = MahaCustomCamera()
             camera.takeDoneBlock = { [weak self] image, videoURL in
@@ -1024,14 +1027,14 @@ class MahaThumbnailViewController: UIViewController {
             }
         }
     }
-    
+
     private func save(image: UIImage?, videoURL: URL?) {
         if let image {
             let hud = MahaProgressHUD.show(toast: .processing)
             MahaPhotoManager.saveImageToAlbum(image: image) { [weak self] error, asset in
                 if error == nil, let asset {
                     let model = MahaPhotoModel(asset: asset)
-                    self?.handleDataArray(newModel: model)
+                    self?.insertCapturedModel(model)
                 } else {
                     showAlertView(localLanguageTextValue(.saveImageError), self)
                 }
@@ -1042,7 +1045,7 @@ class MahaThumbnailViewController: UIViewController {
             MahaPhotoManager.saveVideoToAlbum(url: videoURL) { [weak self] error, asset in
                 if error == nil, let asset {
                     let model = MahaPhotoModel(asset: asset)
-                    self?.handleDataArray(newModel: model)
+                    self?.insertCapturedModel(model)
                 } else {
                     showAlertView(localLanguageTextValue(.saveVideoError), self)
                 }
@@ -1050,31 +1053,31 @@ class MahaThumbnailViewController: UIViewController {
             }
         }
     }
-    
-    private func handleDataArray(newModel: MahaPhotoModel) {
+
+    private func insertCapturedModel(_ newModel: MahaPhotoModel) {
         hasTakeANewAsset = true
         albumList?.refreshResult()
-        
-        let nav = navigationController as? MahaImageNavController
+
+        let navigationController = photoNavigationController
         let config = MahaPhotoConfiguration.default()
         let uiConfig = MahaPhotoUIConfiguration.default()
         var insertIndex = 0
-        
+
         if uiConfig.sortAscending {
-            insertIndex = arrDataSources.count
-            arrDataSources.append(newModel)
+            insertIndex = photoModels.count
+            photoModels.append(newModel)
         } else {
             // 保存拍照的照片或者视频，说明肯定有camera cell
             insertIndex = offset
-            arrDataSources.insert(newModel, at: 0)
+            photoModels.insert(newModel, at: 0)
         }
-        
+
         var canSelect = true
         // If mixed selection is not allowed, and the newModel type is video, it will not be selected.
         if !config.allowMixSelect, newModel.type == .video {
             canSelect = false
         }
-        
+
         // 如果从拍照出来的是图片，且是自定义相机，且满足了编辑条件，代表从拍照界面已经编辑过了，这里就不重复进入后续编辑逻辑了，直接返回
         if newModel.type == .image,
            config.useCustomCamera,
@@ -1082,30 +1085,30 @@ class MahaThumbnailViewController: UIViewController {
            config.editAfterSelectThumbnailImage,
            config.allowEditImage {
             newModel.isSelected = true
-            nav?.arrSelectedModels.append(newModel)
+            navigationController?.selectedPhotoModels.append(newModel)
             config.didSelectAsset?(newModel.asset)
             doneBtnClick()
             return
         }
-        
+
         // 是否是单选模式，且不显示选择按钮
         let isSingleAndNotShowSelectBtnMode = config.maxSelectCount == 1 && !config.showSelectBtnWhenSingleSelect
-        
-        if canSelect, canAddModel(newModel, currentSelectCount: nav?.arrSelectedModels.count ?? 0, sender: self, showAlert: false) {
+
+        if canSelect, canAddModel(newModel, currentSelectCount: navigationController?.selectedPhotoModels.count ?? 0, sender: self, showAlert: false) {
             if !shouldDirectEdit(newModel) {
                 if config.callbackDirectlyAfterTakingPhoto || !isSingleAndNotShowSelectBtnMode {
                     newModel.isSelected = true
-                    nav?.arrSelectedModels.append(newModel)
+                    navigationController?.selectedPhotoModels.append(newModel)
                     config.didSelectAsset?(newModel.asset)
                 }
-                
+
                 if config.callbackDirectlyAfterTakingPhoto {
                     doneBtnClick()
                     return
                 }
             }
         }
-        
+
         let insertIndexPath = IndexPath(row: insertIndex, section: 0)
         collectionView.performBatchUpdates {
             self.collectionView.insertItems(at: [insertIndexPath])
@@ -1113,18 +1116,18 @@ class MahaThumbnailViewController: UIViewController {
             self.collectionView.scrollToItem(at: insertIndexPath, at: .centeredVertically, animated: true)
             self.collectionView.reloadItems(at: self.collectionView.indexPathsForVisibleItems)
         }
-        
-        resetBottomToolBtnStatus()
+
+        refreshBottomToolbarState()
     }
-    
+
     private func showEditImageVC(model: MahaPhotoModel) {
-        guard let nav = navigationController as? MahaImageNavController else {
+        guard let navigationController = photoNavigationController else {
             zlLoggerInDebug("Navigation controller is null")
             return
         }
-        
+
         var requestAssetID: PHImageRequestID?
-        
+
         let hud = MahaProgressHUD.show(timeout: MahaPhotoUIConfiguration.default().timeout)
         hud.timeoutBlock = { [weak self] in
             showAlertView(localLanguageTextValue(.timeout), self)
@@ -1132,33 +1135,33 @@ class MahaThumbnailViewController: UIViewController {
                 PHImageManager.default().cancelImageRequest(requestAssetID)
             }
         }
-        
-        requestAssetID = MahaPhotoManager.fetchImage(for: model.asset, size: model.previewSize) { [weak self, weak nav] image, isDegraded in
+
+        requestAssetID = MahaPhotoManager.fetchImage(for: model.asset, size: model.previewSize) { [weak self, weak navigationController] image, isDegraded in
             guard !isDegraded else {
                 return
             }
-            
+
             if let image = image {
-                MahaEditImageViewController.showEditImageVC(parentVC: self, image: image, editModel: model.editImageModel) { [weak nav] ei, editImageModel in
+                MahaEditImageViewController.showEditImageVC(parentVC: self, image: image, editModel: model.editImageModel) { [weak navigationController] editedImage, editImageModel in
                     model.isSelected = true
-                    model.editImage = ei
+                    model.editImage = editedImage
                     model.editImageModel = editImageModel
-                    nav?.arrSelectedModels.append(model)
+                    navigationController?.selectedPhotoModels.append(model)
                     MahaPhotoConfiguration.default().didSelectAsset?(model.asset)
                     self?.doneBtnClick()
                 }
             } else {
                 showAlertView(localLanguageTextValue(.imageLoadFailed), self)
             }
-            
+
             hud.hide()
         }
     }
-    
+
     private func showEditVideoVC(model: MahaPhotoModel) {
-        let nav = navigationController as? MahaImageNavController
+        let navigationController = photoNavigationController
         let config = MahaPhotoConfiguration.default()
-        
+
         var requestAssetID: PHImageRequestID?
         let hud = MahaProgressHUD.show(timeout: MahaPhotoUIConfiguration.default().timeout)
         hud.timeoutBlock = { [weak self] in
@@ -1167,18 +1170,18 @@ class MahaThumbnailViewController: UIViewController {
                 PHImageManager.default().cancelImageRequest(requestAssetID)
             }
         }
-        
+
         func inner_showEditVideoVC(_ avAsset: AVAsset) {
             let vc = MahaEditVideoViewController(avAsset: avAsset)
-            vc.editFinishBlock = { [weak self, weak nav] url in
+            vc.editFinishBlock = { [weak self, weak navigationController] url in
                 if let url = url {
-                    MahaPhotoManager.saveVideoToAlbum(url: url) { [weak self, weak nav] error, asset in
+                    MahaPhotoManager.saveVideoToAlbum(url: url) { [weak self, weak navigationController] error, asset in
                         if error == nil, let asset {
-                            let m = MahaPhotoModel(asset: asset)
-                            m.isSelected = true
-                            nav?.arrSelectedModels.append(m)
-                            config.didSelectAsset?(m.asset)
-                            
+                            let selectedModel = MahaPhotoModel(asset: asset)
+                            selectedModel.isSelected = true
+                            navigationController?.selectedPhotoModels.append(selectedModel)
+                            config.didSelectAsset?(selectedModel.asset)
+
                             self?.doneBtnClick()
                         } else {
                             showAlertView(localLanguageTextValue(.saveVideoError), self)
@@ -1186,16 +1189,16 @@ class MahaThumbnailViewController: UIViewController {
                     }
                 } else {
                     model.isSelected = true
-                    nav?.arrSelectedModels.append(model)
+                    navigationController?.selectedPhotoModels.append(model)
                     config.didSelectAsset?(model.asset)
-                    
+
                     self?.doneBtnClick()
                 }
             }
             vc.modalPresentationStyle = .fullScreen
             showDetailViewController(vc, sender: nil)
         }
-        
+
         // 提前fetch一下 avasset
         requestAssetID = MahaPhotoManager.fetchAVAsset(forVideo: model.asset) { [weak self] avAsset, _ in
             hud.hide()
@@ -1206,7 +1209,7 @@ class MahaThumbnailViewController: UIViewController {
             }
         }
     }
-    
+
     /// 预判界面执行pop动画时，该界面需要执行的内容
     func endPopTransition() {
         hiddenStatusBar = false
@@ -1224,19 +1227,19 @@ extension MahaThumbnailViewController: UIGestureRecognizerDelegate {
         if (config.maxSelectCount == 1 && !config.showSelectBtnWhenSingleSelect) || embedAlbumListView?.isHidden == false {
             return false
         }
-        
+
         let point = gestureRecognizer.location(in: view)
         let navFrame = (embedNavView ?? externalNavView)?.frame ?? .zero
         if navFrame.contains(point) ||
             bottomView.frame.contains(point) {
             return false
         }
-        
+
         let pointInCollectionView = gestureRecognizer.location(in: collectionView)
         if collectionView.indexPathForItem(at: pointInCollectionView) == nil {
             return false
         }
-        
+
         return true
     }
 }
@@ -1247,15 +1250,15 @@ extension MahaThumbnailViewController: UICollectionViewDataSource, UICollectionV
     func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, minimumInteritemSpacingForSectionAt section: Int) -> CGFloat {
         return MahaPhotoUIConfiguration.default().minimumInteritemSpacing
     }
-    
+
     func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, minimumLineSpacingForSectionAt section: Int) -> CGFloat {
         return MahaPhotoUIConfiguration.default().minimumLineSpacing
     }
-    
+
     func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, sizeForItemAt indexPath: IndexPath) -> CGSize {
         let uiConfig = MahaPhotoUIConfiguration.default()
         var columnCount: Int
-        
+
         if let columnCountBlock = uiConfig.columnCountBlock {
             columnCount = columnCountBlock(collectionView.maha.width)
         } else {
@@ -1265,100 +1268,100 @@ extension MahaThumbnailViewController: UICollectionViewDataSource, UICollectionV
                 columnCount += 2
             }
         }
-        
+
         let totalW = collectionView.bounds.width - CGFloat(columnCount - 1) * uiConfig.minimumInteritemSpacing
         let singleW = totalW / CGFloat(columnCount)
         return CGSize(width: singleW, height: singleW)
     }
-    
+
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        return arrDataSources.count + offset
+        return photoModels.count + offset
     }
-    
+
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         let config = MahaPhotoConfiguration.default()
         let uiConfig = MahaPhotoUIConfiguration.default()
-        let nav = navigationController as? MahaImageNavController
-        
-        if showCameraCell, (uiConfig.sortAscending && indexPath.row == arrDataSources.count) || (!uiConfig.sortAscending && indexPath.row == 0) {
+        let navigationController = photoNavigationController
+
+        if shouldShowCameraCell, (uiConfig.sortAscending && indexPath.row == photoModels.count) || (!uiConfig.sortAscending && indexPath.row == 0) {
             // camera cell
-            
+
             let cell = collectionView.dequeueReusableCell(withReuseIdentifier: MahaCameraCell.maha.identifier, for: indexPath) as! MahaCameraCell
-            
+
             if uiConfig.showCaptureImageOnTakePhotoBtn {
-                cell.startCapture()
+                cell.startCapturePreview()
             }
-            
-            cell.isEnable = (nav?.arrSelectedModels.count ?? 0) < config.maxSelectCount
-            
+
+            cell.isEnabledForSelection = (navigationController?.selectedPhotoModels.count ?? 0) < config.maxSelectCount
+
             return cell
         }
-        
+
         if #available(iOS 14, *) {
-            if self.showAddPhotoCell, (uiConfig.sortAscending && indexPath.row == self.arrDataSources.count - 1 + self.offset) || (!uiConfig.sortAscending && indexPath.row == self.offset - 1) {
+            if self.shouldShowAddPhotoCell, (uiConfig.sortAscending && indexPath.row == self.photoModels.count - 1 + self.offset) || (!uiConfig.sortAscending && indexPath.row == self.offset - 1) {
                 return collectionView.dequeueReusableCell(withReuseIdentifier: MahaAddPhotoCell.maha.identifier, for: indexPath)
             }
         }
-        
+
         let cell = collectionView.dequeueReusableCell(withReuseIdentifier: MahaThumbnailPhotoCell.maha.identifier, for: indexPath) as! MahaThumbnailPhotoCell
-        
+
         let model: MahaPhotoModel
-        
+
         if !uiConfig.sortAscending {
-            model = arrDataSources[indexPath.row - offset]
+            model = photoModels[indexPath.row - offset]
         } else {
-            model = arrDataSources[indexPath.row]
+            model = photoModels[indexPath.row]
         }
-        
-        cell.selectedBlock = { [weak self, weak nav] block in
+
+        cell.selectedBlock = { [weak self, weak navigationController] block in
             if !model.isSelected {
-                let currentSelectCount = nav?.arrSelectedModels.count ?? 0
+                let currentSelectCount = navigationController?.selectedPhotoModels.count ?? 0
                 guard canAddModel(model, currentSelectCount: currentSelectCount, sender: self) else {
                     return
                 }
-                
+
                 downloadAssetIfNeed(model: model, sender: self) {
                     if self?.shouldDirectEdit(model) == false {
                         model.isSelected = true
-                        nav?.arrSelectedModels.append(model)
+                        navigationController?.selectedPhotoModels.append(model)
                         block(true)
-                        
+
                         config.didSelectAsset?(model.asset)
                         self?.refreshCellIndexAndMaskView()
-                        
+
                         if config.maxSelectCount == 1, !config.allowPreviewPhotos {
                             self?.doneBtnClick()
                         }
-                        
-                        self?.resetBottomToolBtnStatus()
+
+                        self?.refreshBottomToolbarState()
                     }
                 }
             } else {
                 model.isSelected = false
-                nav?.arrSelectedModels.removeAll { $0 == model }
+                navigationController?.selectedPhotoModels.removeAll { $0 == model }
                 block(false)
-                
+
                 config.didDeselectAsset?(model.asset)
                 self?.refreshCellIndexAndMaskView()
-                
-                self?.resetBottomToolBtnStatus()
+
+                self?.refreshBottomToolbarState()
             }
         }
-        
+
         if config.showSelectedIndex,
-           let index = nav?.arrSelectedModels.firstIndex(where: { $0 == model }) {
+           let index = navigationController?.selectedPhotoModels.firstIndex(where: { $0 == model }) {
             setCellIndex(cell, showIndexLabel: true, index: index + config.initialIndex)
         } else {
             cell.indexLabel.isHidden = true
         }
-        
+
         setCellMaskView(cell, isSelected: model.isSelected, model: model)
-        
+
         cell.model = model
-        
+
         return cell
     }
-    
+
     func collectionView(_ collectionView: UICollectionView, willDisplay cell: UICollectionViewCell, forItemAt indexPath: IndexPath) {
         guard let c = cell as? MahaThumbnailPhotoCell else {
             return
@@ -1367,79 +1370,79 @@ extension MahaThumbnailViewController: UICollectionViewDataSource, UICollectionV
         if !MahaPhotoUIConfiguration.default().sortAscending {
             index -= offset
         }
-        
-        guard arrDataSources.indices ~= index else {
+
+        guard photoModels.indices ~= index else {
             return
         }
-        
-        let model = arrDataSources[index]
+
+        let model = photoModels[index]
         setCellMaskView(c, isSelected: model.isSelected, model: model)
     }
-    
+
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         let cell = collectionView.cellForItem(at: indexPath)
         if let cell = cell as? MahaCameraCell {
-            if cell.isEnable {
+            if cell.isEnabledForSelection {
                 showCamera()
             }
             return
         }
-        
+
         if #available(iOS 14, *) {
             if cell is MahaAddPhotoCell {
                 PHPhotoLibrary.shared().presentLimitedLibraryPicker(from: self)
                 return
             }
         }
-        
+
         guard let cell = cell as? MahaThumbnailPhotoCell else {
             return
         }
-        
+
         let config = MahaPhotoConfiguration.default()
         let uiConfig = MahaPhotoUIConfiguration.default()
-        
+
         if !config.allowPreviewPhotos {
             cell.btnSelectClick()
             return
         }
-        
+
         // 不允许选择，且上面有蒙层时，不准点击
         if !cell.enableSelect, uiConfig.showInvalidMask {
             return
         }
-        
+
         var index = indexPath.row
         if !uiConfig.sortAscending {
             index -= offset
         }
-        
-        guard arrDataSources.indices ~= index else {
+
+        guard photoModels.indices ~= index else {
             return
         }
-        
-        let m = arrDataSources[index]
-        if shouldDirectEdit(m) {
+
+        let model = photoModels[index]
+        if shouldDirectEdit(model) {
             return
         }
-        
-        let vc = MahaPhotoPreviewController(photos: arrDataSources, index: index)
+
+        let vc = MahaPhotoPreviewController(photos: photoModels, index: index)
         vc.backBlock = { [weak self] in
             guard let `self` = self, self.hiddenStatusBar else { return }
             self.hiddenStatusBar = false
         }
         show(vc, sender: nil)
     }
-    
+
     private func shouldDirectEdit(_ model: MahaPhotoModel) -> Bool {
         let config = MahaPhotoConfiguration.default()
-        
+
         let canEditImage = config.editAfterSelectThumbnailImage &&
             config.allowEditImage &&
             config.maxSelectCount == 1 &&
             model.type.rawValue < /**MahaPhotoModel.MediaType.video.rawValue*/
             MahaPhotoModel.MediaType.gif.rawValue //特殊修改了 既能保证普通图片能编辑 也能 保证gif不能编辑
-        
+
         let canEditVideo = (config.editAfterSelectThumbnailImage &&
             config.allowEditVideo &&
             model.type == .video &&
@@ -1448,21 +1451,20 @@ extension MahaThumbnailViewController: UICollectionViewDataSource, UICollectionV
                 model.type == .video &&
                 !config.allowMixSelect &&
                 config.cropVideoAfterSelectThumbnail)
-        
+
         // 当前未选择图片 或已经选择了一张并且点击的是已选择的图片
-        let nav = navigationController as? MahaImageNavController
-        let arrSelectedModels = nav?.arrSelectedModels ?? []
-        let flag = arrSelectedModels.isEmpty || (arrSelectedModels.count == 1 && arrSelectedModels.first?.ident == model.ident)
-        
+        let selectedModels = photoNavigationController?.selectedPhotoModels ?? []
+        let flag = selectedModels.isEmpty || (selectedModels.count == 1 && selectedModels.first?.ident == model.ident)
+
         if canEditImage, flag {
             showEditImageVC(model: model)
         } else if canEditVideo, flag {
             showEditVideoVC(model: model)
         }
-        
+
         return flag && (canEditImage || canEditVideo)
     }
-    
+
     private func setCellIndex(_ cell: MahaThumbnailPhotoCell?, showIndexLabel: Bool, index: Int) {
         guard MahaPhotoConfiguration.default().showSelectedIndex else {
             return
@@ -1470,20 +1472,20 @@ extension MahaThumbnailViewController: UICollectionViewDataSource, UICollectionV
         cell?.index = index
         cell?.indexLabel.isHidden = !showIndexLabel
     }
-    
+
     private func refreshCellIndexAndMaskView() {
         refreshCameraCellStatus()
         let config = MahaPhotoConfiguration.default()
         let uiConfig = MahaPhotoUIConfiguration.default()
         let showIndex = config.showSelectedIndex
         let showMask = uiConfig.showSelectedMask || uiConfig.showInvalidMask
-        
+
         guard showIndex || showMask else {
             return
         }
-        
+
         let visibleIndexPaths = collectionView.indexPathsForVisibleItems
-        
+
         visibleIndexPaths.forEach { indexPath in
             guard let cell = self.collectionView.cellForItem(at: indexPath) as? MahaThumbnailPhotoCell else {
                 return
@@ -1492,14 +1494,14 @@ extension MahaThumbnailViewController: UICollectionViewDataSource, UICollectionV
             if !uiConfig.sortAscending {
                 row -= self.offset
             }
-            let m = self.arrDataSources[row]
-            
-            let arrSel = (self.navigationController as? MahaImageNavController)?.arrSelectedModels ?? []
+            let model = self.photoModels[row]
+
+            let selectedModels = self.photoNavigationController?.selectedPhotoModels ?? []
             var show = false
             var idx = 0
             var isSelected = false
-            for (index, selM) in arrSel.enumerated() {
-                if m == selM {
+            for (index, selectedModel) in selectedModels.enumerated() {
+                if model == selectedModel {
                     show = true
                     idx = index + config.initialIndex
                     isSelected = true
@@ -1510,18 +1512,18 @@ extension MahaThumbnailViewController: UICollectionViewDataSource, UICollectionV
                 self.setCellIndex(cell, showIndexLabel: show, index: idx)
             }
             if showMask {
-                self.setCellMaskView(cell, isSelected: isSelected, model: m)
+                self.setCellMaskView(cell, isSelected: isSelected, model: model)
             }
         }
     }
-    
+
     private func setCellMaskView(_ cell: MahaThumbnailPhotoCell, isSelected: Bool, model: MahaPhotoModel) {
         cell.coverView.isHidden = true
         cell.enableSelect = true
-        let arrSel = (navigationController as? MahaImageNavController)?.arrSelectedModels ?? []
+        let selectedModels = photoNavigationController?.selectedPhotoModels ?? []
         let config = MahaPhotoConfiguration.default()
         let uiConfig = MahaPhotoUIConfiguration.default()
-        
+
         if isSelected {
             cell.coverView.backgroundColor = .maha.selectedMaskColor
             cell.coverView.isHidden = !uiConfig.showSelectedMask
@@ -1529,25 +1531,25 @@ extension MahaThumbnailViewController: UICollectionViewDataSource, UICollectionV
                 cell.layer.borderWidth = 4
             }
         } else {
-            let selCount = arrSel.count
-            if selCount < config.maxSelectCount {
+            let selectedCount = selectedModels.count
+            if selectedCount < config.maxSelectCount {
                 if config.allowMixSelect {
-                    let videoCount = arrSel.filter { $0.type == .video }.count
+                    let videoCount = selectedModels.filter { $0.type == .video }.count
                     if videoCount >= config.maxVideoSelectCount, model.type == .video {
                         cell.coverView.backgroundColor = .maha.invalidMaskColor
                         cell.coverView.isHidden = !uiConfig.showInvalidMask
                         cell.enableSelect = false
-                    } else if (config.maxSelectCount - selCount) <= (config.minVideoSelectCount - videoCount), model.type != .video {
+                    } else if (config.maxSelectCount - selectedCount) <= (config.minVideoSelectCount - videoCount), model.type != .video {
                         cell.coverView.backgroundColor = .maha.invalidMaskColor
                         cell.coverView.isHidden = !uiConfig.showInvalidMask
                         cell.enableSelect = false
                     }
-                } else if selCount > 0 {
+                } else if selectedCount > 0 {
                     cell.coverView.backgroundColor = .maha.invalidMaskColor
                     cell.coverView.isHidden = (!uiConfig.showInvalidMask || model.type != .video)
                     cell.enableSelect = model.type != .video
                 }
-            } else if selCount >= config.maxSelectCount {
+            } else if selectedCount >= config.maxSelectCount {
                 cell.coverView.backgroundColor = .maha.invalidMaskColor
                 cell.coverView.isHidden = !uiConfig.showInvalidMask
                 cell.enableSelect = false
@@ -1557,13 +1559,13 @@ extension MahaThumbnailViewController: UICollectionViewDataSource, UICollectionV
             }
         }
     }
-    
+
     private func refreshCameraCellStatus() {
-        let count = (navigationController as? MahaImageNavController)?.arrSelectedModels.count ?? 0
-        
+        let count = photoNavigationController?.selectedPhotoModels.count ?? 0
+
         for cell in collectionView.visibleCells {
             if let cell = cell as? MahaCameraCell {
-                cell.isEnable = count < MahaPhotoConfiguration.default().maxSelectCount
+                cell.isEnabledForSelection = count < MahaPhotoConfiguration.default().maxSelectCount
                 break
             }
         }
@@ -1584,7 +1586,7 @@ extension MahaThumbnailViewController: UIImagePickerControllerDelegate, UINaviga
     func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
         picker.dismiss(animated: true)
     }
-    
+
     func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
         picker.dismiss(animated: true) {
             let image = info[.originalImage] as? UIImage
@@ -1602,9 +1604,9 @@ extension MahaThumbnailViewController: PHPhotoLibraryChangeObserver {
               let changes = changeInstance.changeDetails(for: albumList.result) else {
             return
         }
-        
+
         MahaMainAsync {
-            guard let nav = self.navigationController as? MahaImageNavController else {
+            guard let navigationController = self.photoNavigationController else {
                 zlLoggerInDebug("Navigation controller is null")
                 return
             }
@@ -1612,28 +1614,28 @@ extension MahaThumbnailViewController: PHPhotoLibraryChangeObserver {
             self.hasTakeANewAsset = true
             self.albumList?.result = changes.fetchResultAfterChanges
             if changes.hasIncrementalChanges {
-                for sm in nav.arrSelectedModels {
-                    let isDelete = changeInstance.changeDetails(for: sm.asset)?.objectWasDeleted ?? false
+                for selectedModel in navigationController.selectedPhotoModels {
+                    let isDelete = changeInstance.changeDetails(for: selectedModel.asset)?.objectWasDeleted ?? false
                     if isDelete {
-                        nav.arrSelectedModels.removeAll { $0 == sm }
+                        navigationController.selectedPhotoModels.removeAll { $0 == selectedModel }
                     }
                 }
                 if !changes.removedObjects.isEmpty || !changes.insertedObjects.isEmpty {
                     self.albumList?.models.removeAll()
                 }
-                
+
                 self.loadPhotos()
             } else {
-                for sm in nav.arrSelectedModels {
-                    let isDelete = changeInstance.changeDetails(for: sm.asset)?.objectWasDeleted ?? false
+                for selectedModel in navigationController.selectedPhotoModels {
+                    let isDelete = changeInstance.changeDetails(for: selectedModel.asset)?.objectWasDeleted ?? false
                     if isDelete {
-                        nav.arrSelectedModels.removeAll { $0 == sm }
+                        navigationController.selectedPhotoModels.removeAll { $0 == selectedModel }
                     }
                 }
                 self.albumList?.models.removeAll()
                 self.loadPhotos()
             }
-            self.resetBottomToolBtnStatus()
+            self.refreshBottomToolbarState()
         }
     }
 }
@@ -1642,11 +1644,11 @@ extension MahaThumbnailViewController: PHPhotoLibraryChangeObserver {
 
 class MahaEmbedAlbumListNavView: UIView {
     private static let titleViewH: CGFloat = 32
-    
+
     private static let arrowH: CGFloat = 20
-    
+
     private var navBlurView: UIVisualEffectView?
-    
+
     private lazy var titleBgControl: UIControl = {
         let control = UIControl()
         control.backgroundColor = .maha.navEmbedTitleViewBgColor
@@ -1655,7 +1657,7 @@ class MahaEmbedAlbumListNavView: UIView {
         control.addTarget(self, action: #selector(titleBgControlClick), for: .touchUpInside)
         return control
     }()
-    
+
     private lazy var albumTitleLabel: UILabel = {
         let label = UILabel()
         label.textColor = .maha.navTitleColor
@@ -1664,14 +1666,14 @@ class MahaEmbedAlbumListNavView: UIView {
         label.textAlignment = .center
         return label
     }()
-    
+
     private lazy var arrow: UIImageView = {
         let view = UIImageView(image: .maha.getImage("zl_downArrow"))
         view.clipsToBounds = true
         view.contentMode = .scaleAspectFill
         return view
     }()
-    
+
     private lazy var cancelBtn: UIButton = {
         let btn = UIButton(type: .custom)
         if MahaPhotoUIConfiguration.default().navCancelButtonStyle == .text {
@@ -1684,39 +1686,39 @@ class MahaEmbedAlbumListNavView: UIView {
         btn.addTarget(self, action: #selector(cancelBtnClick), for: .touchUpInside)
         return btn
     }()
-    
+
     private var isFirstLayout = true
-    
+
     var title: String {
         didSet {
             albumTitleLabel.text = title
             refreshTitleViewFrame()
         }
     }
-    
+
     var selectAlbumBlock: (() -> Void)?
-    
+
     var cancelBlock: (() -> Void)?
-    
+
     init(title: String?) {
         self.title = title ?? ""
         super.init(frame: .zero)
         setupUI()
     }
-    
+
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-    
+
     override func layoutSubviews() {
         super.layoutSubviews()
-        
+
         var insets = UIEdgeInsets(top: 20, left: 0, bottom: 0, right: 0)
         if #available(iOS 11.0, *), deviceIsFringeScreen() {
             insets = safeAreaInsets
         }
-        
+
         refreshTitleViewFrame()
         if MahaPhotoUIConfiguration.default().navCancelButtonStyle == .text {
             let cancelBtnW = localLanguageTextValue(.cancel).maha.boundingRect(font: MahaLayout.navTitleFont, limitSize: CGSize(width: CGFloat.greatestFiniteMagnitude, height: 44)).width
@@ -1725,16 +1727,16 @@ class MahaEmbedAlbumListNavView: UIView {
             cancelBtn.frame = CGRect(x: insets.left + 10, y: insets.top, width: 44, height: 44)
         }
     }
-    
+
     private func refreshTitleViewFrame() {
         var insets = UIEdgeInsets(top: 20, left: 0, bottom: 0, right: 0)
         if #available(iOS 11.0, *), deviceIsFringeScreen() {
             insets = safeAreaInsets
         }
-        
+
         navBlurView?.frame = bounds
         titleBgControl.isHidden = title.isEmpty
-        
+
         let albumTitleW = min(
             bounds.width / 2,
             title.maha.boundingRect(
@@ -1743,7 +1745,7 @@ class MahaEmbedAlbumListNavView: UIView {
             ).width
         )
         let titleBgControlW = albumTitleW + MahaEmbedAlbumListNavView.arrowH + 20
-        
+
         func setFrame() {
             titleBgControl.frame = CGRect(
                 x: (frame.width - titleBgControlW) / 2,
@@ -1759,7 +1761,7 @@ class MahaEmbedAlbumListNavView: UIView {
                 height: MahaEmbedAlbumListNavView.arrowH
             )
         }
-        
+
         if isFirstLayout {
             isFirstLayout = false
             setFrame()
@@ -1769,21 +1771,21 @@ class MahaEmbedAlbumListNavView: UIView {
             }
         }
     }
-    
+
     private func setupUI() {
         backgroundColor = .maha.navBarColor
-        
+
         if let effect = MahaPhotoUIConfiguration.default().navViewBlurEffectOfAlbumList {
             navBlurView = UIVisualEffectView(effect: effect)
             addSubview(navBlurView!)
         }
-        
+
         addSubview(titleBgControl)
         titleBgControl.addSubview(albumTitleLabel)
         titleBgControl.addSubview(arrow)
         addSubview(cancelBtn)
     }
-    
+
     @objc private func titleBgControlClick() {
         selectAlbumBlock?()
         if arrow.transform == .identity {
@@ -1796,11 +1798,11 @@ class MahaEmbedAlbumListNavView: UIView {
             }
         }
     }
-    
+
     @objc private func cancelBtnClick() {
         cancelBlock?()
     }
-    
+
     func reset() {
         UIView.animate(withDuration: 0.25) {
             self.arrow.transform = .identity
@@ -1817,9 +1819,9 @@ class MahaExternalAlbumListNavView: UIView {
             refreshTitleViewFrame()
         }
     }
-    
+
     private var navBlurView: UIVisualEffectView?
-    
+
     private lazy var albumTitleLabel: UILabel = {
         let label = UILabel()
         label.textColor = .maha.navTitleColor
@@ -1828,7 +1830,7 @@ class MahaExternalAlbumListNavView: UIView {
         label.textAlignment = .center
         return label
     }()
-    
+
     private lazy var cancelBtn: UIButton = {
         let btn = UIButton(type: .custom)
         if MahaPhotoUIConfiguration.default().navCancelButtonStyle == .text {
@@ -1841,10 +1843,10 @@ class MahaExternalAlbumListNavView: UIView {
         btn.addTarget(self, action: #selector(cancelBtnClick), for: .touchUpInside)
         return btn
     }()
-    
+
     lazy var backBtn: UIButton = {
         let btn = UIButton(type: .custom)
-        
+
         var image = UIImage.maha.getImage("zl_navBack")
         if isRTL() {
             image = image?.imageFlippedForRightToLeftLayoutDirection()
@@ -1852,39 +1854,39 @@ class MahaExternalAlbumListNavView: UIView {
         } else {
             btn.imageEdgeInsets = UIEdgeInsets(top: 0, left: -10, bottom: 0, right: 0)
         }
-        
+
         btn.setImage(image, for: .normal)
-        
+
         btn.addTarget(self, action: #selector(backBtnClick), for: .touchUpInside)
         return btn
     }()
-    
+
     var backBlock: (() -> Void)?
-    
+
     var cancelBlock: (() -> Void)?
-    
+
     init(title: String?) {
         self.title = title ?? ""
         super.init(frame: .zero)
         setupUI()
     }
-    
+
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-    
+
     override func layoutSubviews() {
         super.layoutSubviews()
-        
+
         var insets = UIEdgeInsets(top: 20, left: 0, bottom: 0, right: 0)
         if #available(iOS 11.0, *), deviceIsFringeScreen() {
             insets = safeAreaInsets
         }
-        
+
         navBlurView?.frame = bounds
         refreshTitleViewFrame()
-        
+
         var cancelBtnW: CGFloat = 44
         if MahaPhotoUIConfiguration.default().navCancelButtonStyle == .text {
             cancelBtnW = localLanguageTextValue(.cancel)
@@ -1893,7 +1895,7 @@ class MahaExternalAlbumListNavView: UIView {
                     limitSize: CGSize(width: CGFloat.greatestFiniteMagnitude, height: 44)
                 ).width + 20
         }
-        
+
         if isRTL() {
             backBtn.frame = CGRect(x: bounds.width - insets.right - 60, y: insets.top, width: 60, height: 44)
             cancelBtn.frame = CGRect(x: insets.left + 10, y: insets.top, width: cancelBtnW, height: 44)
@@ -1902,34 +1904,34 @@ class MahaExternalAlbumListNavView: UIView {
             cancelBtn.frame = CGRect(x: bounds.width - insets.right - cancelBtnW - 10, y: insets.top, width: cancelBtnW, height: 44)
         }
     }
-    
+
     private func refreshTitleViewFrame() {
         var insets = UIEdgeInsets(top: 20, left: 0, bottom: 0, right: 0)
         if #available(iOS 11.0, *), deviceIsFringeScreen() {
             insets = safeAreaInsets
         }
-        
+
         let albumTitleW = min(bounds.width / 2, title.maha.boundingRect(font: MahaLayout.navTitleFont, limitSize: CGSize(width: CGFloat.greatestFiniteMagnitude, height: 44)).width)
         albumTitleLabel.frame = CGRect(x: (bounds.width - albumTitleW) / 2, y: insets.top, width: albumTitleW, height: 44)
     }
-    
+
     private func setupUI() {
         backgroundColor = .maha.navBarColor
-        
+
         if let effect = MahaPhotoUIConfiguration.default().navViewBlurEffectOfAlbumList {
             navBlurView = UIVisualEffectView(effect: effect)
             addSubview(navBlurView!)
         }
-        
+
         addSubview(backBtn)
         addSubview(albumTitleLabel)
         addSubview(cancelBtn)
     }
-    
+
     @objc private func backBtnClick() {
         backBlock?()
     }
-    
+
     @objc private func cancelBtnClick() {
         cancelBlock?()
     }
@@ -1937,9 +1939,9 @@ class MahaExternalAlbumListNavView: UIView {
 
 class MahaLimitedAuthorityTipsView: UIView {
     static let height: CGFloat = 70
-    
+
     private lazy var icon = UIImageView(image: .maha.getImage("zl_warning"))
-    
+
     private lazy var tipsLabel: UILabel = {
         let label = UILabel()
         label.font = .maha.font(ofSize: 14)
@@ -1952,39 +1954,39 @@ class MahaLimitedAuthorityTipsView: UIView {
         label.minimumScaleFactor = 0.5
         return label
     }()
-    
+
     private lazy var arrow = UIImageView(image: .maha.getImage("zl_right_arrow"))
-    
+
     override init(frame: CGRect) {
         super.init(frame: frame)
-        
+
         addSubview(icon)
         addSubview(tipsLabel)
         addSubview(arrow)
-        
+
         let tap = UITapGestureRecognizer(target: self, action: #selector(tapAction))
         addGestureRecognizer(tap)
     }
-    
+
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-    
+
     override func layoutSubviews() {
         super.layoutSubviews()
-        
+
         icon.frame = CGRect(x: 18, y: (MahaLimitedAuthorityTipsView.height - 25) / 2, width: 25, height: 25)
         tipsLabel.frame = CGRect(x: 55, y: (MahaLimitedAuthorityTipsView.height - 40) / 2, width: frame.width - 55 - 30, height: 40)
         arrow.frame = CGRect(x: frame.width - 25, y: (MahaLimitedAuthorityTipsView.height - 12) / 2, width: 12, height: 12)
     }
-    
+
     @objc private func tapAction() {
         guard let url = URL(string: UIApplication.openSettingsURLString),
               UIApplication.shared.canOpenURL(url) else {
             return
         }
-        
+
         UIApplication.shared.open(url, options: [:], completionHandler: nil)
     }
 }

@@ -29,9 +29,9 @@ import UIKit
 // MARK: Edit tool cell
 
 class MahaEditToolCell: UICollectionViewCell {
-    var toolType: MahaEditImageConfiguration.EditTool = .draw {
+    var tool: MahaEditImageConfiguration.EditTool = .draw {
         didSet {
-            switch toolType {
+            switch tool {
             case .draw:
                 icon.image = .maha.getImage("zl_drawLine")
                 icon.highlightedImage = .maha.getImage("zl_drawLine_selected")
@@ -60,18 +60,23 @@ class MahaEditToolCell: UICollectionViewCell {
             }
         }
     }
-    
+
     lazy var icon = UIImageView(frame: contentView.bounds)
-    
+
     override init(frame: CGRect) {
         super.init(frame: frame)
-        
+
         contentView.addSubview(icon)
     }
-    
+
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        icon.frame = contentView.bounds
     }
 }
 
@@ -85,7 +90,7 @@ class MahaDrawColorCell: UICollectionViewCell {
         view.frame = CGRect(x: 0, y: 0, width: 20, height: 20)
         return view
     }()
-    
+
     lazy var bgWhiteView: UIView = {
         let view = UIView()
         view.backgroundColor = .white
@@ -94,28 +99,28 @@ class MahaDrawColorCell: UICollectionViewCell {
         view.frame = CGRect(x: 0, y: 0, width: 24, height: 24)
         return view
     }()
-    
+
     var color: UIColor = .clear {
         didSet {
             colorView.backgroundColor = color
         }
     }
-    
+
     override init(frame: CGRect) {
         super.init(frame: frame)
-        
+
         contentView.addSubview(bgWhiteView)
         contentView.addSubview(colorView)
     }
-    
+
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-    
+
     override func layoutSubviews() {
         super.layoutSubviews()
-        
+
         colorView.center = contentView.center
         bgWhiteView.center = contentView.center
     }
@@ -137,7 +142,7 @@ class MahaFilterImageCell: UICollectionViewCell {
         label.minimumScaleFactor = 0.5
         return label
     }()
-    
+
     lazy var imageView: UIImageView = {
         let view = UIImageView()
         view.frame = CGRect(x: 0, y: 0, width: bounds.width, height: bounds.width)
@@ -145,17 +150,23 @@ class MahaFilterImageCell: UICollectionViewCell {
         view.clipsToBounds = true
         return view
     }()
-    
+
     override init(frame: CGRect) {
         super.init(frame: frame)
-        
+
         contentView.addSubview(nameLabel)
         contentView.addSubview(imageView)
     }
-    
+
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        imageView.frame = CGRect(x: 0, y: 0, width: bounds.width, height: bounds.width)
+        nameLabel.frame = CGRect(x: 0, y: bounds.height - 20, width: bounds.width, height: 20)
     }
 }
 
@@ -177,7 +188,7 @@ class MahaAdjustToolCell: UICollectionViewCell {
         label.minimumScaleFactor = 0.5
         return label
     }()
-    
+
     lazy var imageView: UIImageView = {
         let view = UIImageView()
         view.frame = CGRect(x: (bounds.width - 30) / 2, y: 0, width: 30, height: 30)
@@ -185,10 +196,10 @@ class MahaAdjustToolCell: UICollectionViewCell {
         view.clipsToBounds = true
         return view
     }()
-    
-    var adjustTool: MahaEditImageConfiguration.AdjustTool = .brightness {
+
+    var tool: MahaEditImageConfiguration.AdjustTool = .brightness {
         didSet {
-            switch adjustTool {
+            switch tool {
             case .brightness:
                 imageView.image = .maha.getImage("zl_brightness")
                 imageView.highlightedImage = .maha.getImage("zl_brightness_selected")
@@ -208,16 +219,22 @@ class MahaAdjustToolCell: UICollectionViewCell {
             }
         }
     }
-    
+
     override init(frame: CGRect) {
         super.init(frame: frame)
-        
+
         contentView.addSubview(nameLabel)
         contentView.addSubview(imageView)
     }
-    
+
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        imageView.frame = CGRect(x: (bounds.width - 30) / 2, y: 0, width: 30, height: 30)
+        nameLabel.frame = CGRect(x: 0, y: bounds.height - 30, width: bounds.width, height: 30)
     }
 }

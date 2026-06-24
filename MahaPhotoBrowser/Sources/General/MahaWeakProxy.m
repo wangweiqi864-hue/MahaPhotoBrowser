@@ -29,7 +29,10 @@
 @implementation MahaWeakProxy
 
 - (instancetype)initWithTarget:(id)target {
-    _target = target;
+    self = [super init];
+    if (self) {
+        _proxiedTarget = target;
+    }
     return self;
 }
 
@@ -38,7 +41,7 @@
 }
 
 - (id)forwardingTargetForSelector:(SEL)selector {
-    return _target;
+    return _proxiedTarget;
 }
 
 - (void)forwardInvocation:(NSInvocation *)invocation {

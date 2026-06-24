@@ -26,10 +26,10 @@
 
 import Foundation
 
-func mahaGetAssociatedObject<T>(_ object: Any, _ key: UnsafeRawPointer) -> T? {
-    return objc_getAssociatedObject(object, key) as? T
+func mahaGetAssociatedObject<T>(_ hostObject: Any, _ associationKey: UnsafeRawPointer) -> T? {
+    return objc_getAssociatedObject(hostObject, associationKey) as? T
 }
 
-func mahaSetRetainedAssociatedObject<T>(_ object: Any, _ key: UnsafeRawPointer, _ value: T) {
-    objc_setAssociatedObject(object, key, value, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+func mahaSetRetainedAssociatedObject<T>(_ hostObject: Any, _ associationKey: UnsafeRawPointer, _ associatedValue: T) {
+    objc_setAssociatedObject(hostObject, associationKey, associatedValue, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
 }

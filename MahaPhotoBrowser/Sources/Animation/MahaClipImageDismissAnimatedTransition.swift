@@ -27,31 +27,39 @@
 import UIKit
 
 class MahaClipImageDismissAnimatedTransition: NSObject, UIViewControllerAnimatedTransitioning {
+    private let animationDuration: TimeInterval = 0.25
+
     func transitionDuration(using transitionContext: UIViewControllerContextTransitioning?) -> TimeInterval {
-        return 0.25
+        animationDuration
     }
-    
+
     func animateTransition(using transitionContext: UIViewControllerContextTransitioning) {
-        guard let fromVC = transitionContext.viewController(forKey: .from) as? MahaClipImageViewController, let toVC = transitionContext.viewController(forKey: .to) as? MahaEditImageViewController else {
+        guard let sourceViewController = transitionContext.viewController(forKey: .from) as? MahaClipImageViewController,
+              let destinationViewController = transitionContext.viewController(forKey: .to) as? MahaEditImageViewController else {
             transitionContext.completeTransition(!transitionContext.transitionWasCancelled)
             return
         }
-        
+
         let containerView = transitionContext.containerView
-        containerView.addSubview(toVC.view)
-        
-        let imageView = UIImageView(frame: fromVC.dismissAnimateFromRect)
-        imageView.contentMode = .scaleAspectFill
-        imageView.clipsToBounds = true
-        imageView.image = fromVC.dismissAnimateImage
-        containerView.addSubview(imageView)
-        
-        UIView.animate(withDuration: 0.3, animations: {
-            imageView.frame = toVC.originalFrame
+        containerView.addSubview(destinationViewController.view)
+
+        let transitionImageView = makeTransitionImageView(from: sourceViewController)
+        containerView.addSubview(transitionImageView)
+
+        UIView.animate(withDuration: animationDuration, animations: {
+            transitionImageView.frame = destinationViewController.originalFrame
         }) { _ in
-            toVC.finishClipDismissAnimate()
-            imageView.removeFromSuperview()
+            destinationViewController.finishClipDismissAnimate()
+            transitionImageView.removeFromSuperview()
             transitionContext.completeTransition(!transitionContext.transitionWasCancelled)
         }
+    }
+
+    private func makeTransitionImageView(from sourceViewController: MahaClipImageViewController) -> UIImageView {
+        let imageView = UIImageView(frame: sourceViewController.dismissAnimateFromRect)
+        imageView.contentMode = .scaleAspectFill
+        imageView.clipsToBounds = true
+        imageView.image = sourceViewController.dismissAnimateImage
+        return imageView
     }
 }

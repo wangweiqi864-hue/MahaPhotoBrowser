@@ -28,6 +28,6 @@ import Foundation
 
 extension MahaPhotoBrowserWrapper where Base == Bool {
     var intValue: Int {
-        base ? 1 : 0
+        return base ? 1 : 0
     }
 }

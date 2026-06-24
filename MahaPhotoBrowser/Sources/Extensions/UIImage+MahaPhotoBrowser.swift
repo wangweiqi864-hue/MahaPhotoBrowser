@@ -52,8 +52,8 @@ public extension MahaPhotoBrowserWrapper where Base: UIImage {
         let ratio = CGFloat(max(frameCount, maxFrameCount)) / CGFloat(maxFrameCount)
         frameCount = min(frameCount, maxFrameCount)
         
-        var images = [UIImage]()
-        var frameDuration = [Int]()
+        var frameImages = [UIImage]()
+        var frameDurations = [Int]()
         
         for i in 0..<frameCount {
             let index = Int(floor(CGFloat(i) * ratio))
@@ -65,28 +65,28 @@ public extension MahaPhotoBrowserWrapper where Base: UIImage {
             // Get current animated GIF frame duration
             let currFrameDuration = getFrameDuration(from: imageSource, at: index) * min(ratio, 3)
             // Second to ms
-            frameDuration.append(Int(currFrameDuration * 1000))
+            frameDurations.append(Int(currFrameDuration * 1000))
             
-            images.append(UIImage(cgImage: imageRef, scale: 1, orientation: .up))
+            frameImages.append(UIImage(cgImage: imageRef, scale: 1, orientation: .up))
         }
         
         // https://github.com/kiritmodi2702/GIF-Swift
         let duration: Int = {
             var sum = 0
-            for val in frameDuration {
+            for val in frameDurations {
                 sum += val
             }
             return sum
         }()
         
         // 求出每一帧的最大公约数
-        let gcd = gcdForArray(frameDuration)
+        let gcd = greatestCommonDivisor(for: frameDurations)
         var frames = [UIImage]()
 
         for i in 0..<frameCount {
-            let frameImage = images[i]
+            let frameImage = frameImages[i]
             // 每张图片的时长除以最大公约数，得出需要展示的张数
-            let count = Int(frameDuration[i] / gcd)
+            let count = Int(frameDurations[i] / gcd)
 
             for _ in 0..<count {
                 frames.append(frameImage)
@@ -120,38 +120,38 @@ public extension MahaPhotoBrowserWrapper where Base: UIImage {
         return frameDuration.doubleValue > 0.011 ? frameDuration.doubleValue : defaultFrameDuration
     }
     
-    private static func gcdForArray(_ array: [Int]) -> Int {
-        if array.isEmpty {
+    private static func greatestCommonDivisor(for values: [Int]) -> Int {
+        if values.isEmpty {
             return 1
         }
 
-        var gcd = array[0]
+        var divisor = values[0]
 
-        for val in array {
-            gcd = gcdForPair(val, gcd)
+        for value in values {
+            divisor = greatestCommonDivisor(between: value, and: divisor)
         }
 
-        return gcd
+        return divisor
     }
 
-    private static func gcdForPair(_ num1: Int?, _ num2: Int?) -> Int {
-        guard var num1 = num1, var num2 = num2 else {
-            return num1 ?? (num2 ?? 0)
+    private static func greatestCommonDivisor(between leftValue: Int?, and rightValue: Int?) -> Int {
+        guard var leftValue = leftValue, var rightValue = rightValue else {
+            return leftValue ?? (rightValue ?? 0)
         }
         
-        if num1 < num2 {
-            swap(&num1, &num2)
+        if leftValue < rightValue {
+            swap(&leftValue, &rightValue)
         }
 
-        var rest: Int
+        var remainder: Int
         while true {
-            rest = num1 % num2
+            remainder = leftValue % rightValue
 
-            if rest == 0 {
-                return num2
+            if remainder == 0 {
+                return rightValue
             } else {
-                num1 = num2
-                num2 = rest
+                leftValue = rightValue
+                rightValue = remainder
             }
         }
     }

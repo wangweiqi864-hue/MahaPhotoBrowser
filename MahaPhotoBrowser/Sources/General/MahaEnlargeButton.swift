@@ -43,24 +43,23 @@ public class MahaEnlargeButton: UIButton {
             return false
         }
         
-        let rect = enlargeRect()
-        if rect.equalTo(bounds) {
+        let hitTestBounds = expandedHitTestBounds()
+        if hitTestBounds.equalTo(bounds) {
             return super.point(inside: point, with: event)
         }
-        return rect.contains(point) ? true : false
+        return hitTestBounds.contains(point)
     }
     
-    private func enlargeRect() -> CGRect {
+    private func expandedHitTestBounds() -> CGRect {
         guard enlargeInsets != .zero else {
             return bounds
         }
         
-        let rect = CGRect(
+        return CGRect(
             x: bounds.minX - enlargeInsets.left,
             y: bounds.minY - enlargeInsets.top,
             width: bounds.width + enlargeInsets.left + enlargeInsets.right,
             height: bounds.height + enlargeInsets.top + enlargeInsets.bottom
         )
-        return rect
     }
 }

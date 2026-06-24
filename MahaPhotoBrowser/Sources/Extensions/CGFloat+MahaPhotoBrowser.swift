@@ -28,6 +28,6 @@ import UIKit
 
 extension MahaPhotoBrowserWrapper where Base == CGFloat {
     var toPi: CGFloat {
-        return base / 180 * .pi
+        return (base / 180) * .pi
     }
 }

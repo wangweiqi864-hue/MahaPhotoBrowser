@@ -29,10 +29,10 @@
 import UIKit
 
 class MahaWeakProxy: NSObject {
-    private weak var target: NSObjectProtocol?
+    private weak var proxiedTarget: NSObjectProtocol?
     
     init(target: NSObjectProtocol) {
-        self.target = target
+        proxiedTarget = target
         super.init()
     }
     
@@ -41,11 +41,11 @@ class MahaWeakProxy: NSObject {
     }
     
     override func forwardingTarget(for aSelector: Selector!) -> Any? {
-        return target
+        return proxiedTarget
     }
     
     override func responds(to aSelector: Selector!) -> Bool {
-        return target?.responds(to: aSelector) ?? false
+        return proxiedTarget?.responds(to: aSelector) ?? false
     }
 }
 

@@ -45,88 +45,71 @@ import Foundation
     case turkish
     case arabic
     case dutch
-    
+
     var key: String {
-        var key = "en"
-        
         switch self {
         case .system:
-            key = Locale.preferredLanguages.first ?? "en"
-            
-            if key.hasPrefix("zh") {
-                if key.range(of: "Hans") != nil {
-                    key = "zh-Hans"
-                } else {
-                    key = "zh-Hant"
-                }
-            } else if key.hasPrefix("ja") {
-                key = "ja-US"
-            } else if key.hasPrefix("fr") {
-                key = "fr"
-            } else if key.hasPrefix("de") {
-                key = "de"
-            } else if key.hasPrefix("ru") {
-                key = "ru"
-            } else if key.hasPrefix("vi") {
-                key = "vi"
-            } else if key.hasPrefix("ko") {
-                key = "ko"
-            } else if key.hasPrefix("ms") {
-                key = "ms"
-            } else if key.hasPrefix("it") {
-                key = "it"
-            } else if key.hasPrefix("id") {
-                key = "id"
-            } else if key.hasPrefix("pt") {
-                key = "pt-BR"
-            } else if key.hasPrefix("es") {
-                key = "es-419"
-            } else if key.hasPrefix("tr") {
-                key = "tr"
-            } else if key.hasPrefix("ar") {
-                key = "ar"
-            } else if key.hasPrefix("nl") {
-                key = "nl"
-            } else {
-                key = "en"
-            }
+            return Self.systemLanguageKey(for: Locale.preferredLanguages.first ?? "en")
         case .chineseSimplified:
-            key = "zh-Hans"
+            return "zh-Hans"
         case .chineseTraditional:
-            key = "zh-Hant"
+            return "zh-Hant"
         case .english:
-            key = "en"
+            return "en"
         case .japanese:
-            key = "ja-US"
+            return "ja-US"
         case .french:
-            key = "fr"
+            return "fr"
         case .german:
-            key = "de"
+            return "de"
         case .russian:
-            key = "ru"
+            return "ru"
         case .vietnamese:
-            key = "vi"
+            return "vi"
         case .korean:
-            key = "ko"
+            return "ko"
         case .malay:
-            key = "ms"
+            return "ms"
         case .italian:
-            key = "it"
+            return "it"
         case .indonesian:
-            key = "id"
+            return "id"
         case .portuguese:
-            key = "pt-BR"
+            return "pt-BR"
         case .spanish:
-            key = "es-419"
+            return "es-419"
         case .turkish:
-            key = "tr"
+            return "tr"
         case .arabic:
-            key = "ar"
+            return "ar"
         case .dutch:
-            key = "nl"
+            return "nl"
         }
+    }
+    
+    private static func systemLanguageKey(for preferredLanguage: String) -> String {
+        if preferredLanguage.hasPrefix("zh") {
+            return preferredLanguage.range(of: "Hans") != nil ? "zh-Hans" : "zh-Hant"
+        }
+
+        let languageMappings: [(prefix: String, key: String)] = [
+            ("ja", "ja-US"),
+            ("fr", "fr"),
+            ("de", "de"),
+            ("ru", "ru"),
+            ("vi", "vi"),
+            ("ko", "ko"),
+            ("ms", "ms"),
+            ("it", "it"),
+            ("id", "id"),
+            ("pt", "pt-BR"),
+            ("es", "es-419"),
+            ("tr", "tr"),
+            ("ar", "ar"),
+            ("nl", "nl")
+        ]
         
-        return key
+        return languageMappings.first(where: { preferredLanguage.hasPrefix($0.prefix) })?.key ?? "en"
     }
 }
 

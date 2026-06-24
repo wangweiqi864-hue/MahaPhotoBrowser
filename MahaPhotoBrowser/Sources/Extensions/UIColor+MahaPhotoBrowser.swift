@@ -197,7 +197,7 @@ extension MahaPhotoBrowserWrapper where Base: UIColor {
     
     /// iOS14 limited 权限时候，小图界面下方显示 选择更多图片 标题颜色
     static var limitedAuthorityTipsColor: UIColor {
-        return MahaPhotoUIConfiguration.default().limitedAuthorityTipsColor
+        MahaPhotoUIConfiguration.default().limitedAuthorityTipsColor
     }
     
     /// 自定义相机录制视频时，进度条颜色
@@ -286,12 +286,12 @@ extension MahaPhotoBrowserWrapper where Base: UIColor {
     }
     
     func argbTuple() -> UIColor.MahaARGB {
-        var red: CGFloat = 0
-        var green: CGFloat = 0
-        var blue: CGFloat = 0
-        var alpha: CGFloat = 0
+        var redComponent: CGFloat = 0
+        var greenComponent: CGFloat = 0
+        var blueComponent: CGFloat = 0
+        var alphaComponent: CGFloat = 0
         
-        base.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
-        return (alpha, red, green, blue)
+        base.getRed(&redComponent, green: &greenComponent, blue: &blueComponent, alpha: &alphaComponent)
+        return (alphaComponent, redComponent, greenComponent, blueComponent)
     }
 }

@@ -28,7 +28,7 @@ import UIKit
 
 extension MahaPhotoBrowserWrapper where Base: UICollectionViewCell {
     static var identifier: String {
-        NSStringFromClass(Base.self)
+        return NSStringFromClass(Base.self)
     }
     
     static func register(_ collectionView: UICollectionView) {
@@ -38,7 +38,7 @@ extension MahaPhotoBrowserWrapper where Base: UICollectionViewCell {
 
 extension MahaPhotoBrowserWrapper where Base: UITableViewCell {
     static var identifier: String {
-        NSStringFromClass(Base.self)
+        return NSStringFromClass(Base.self)
     }
     
     static func register(_ tableView: UITableView) {
