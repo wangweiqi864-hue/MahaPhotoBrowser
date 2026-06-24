@@ -995,7 +995,7 @@ extension MahaPhotoPreviewSheet: UICollectionViewDataSource, UICollectionViewDel
         }
         
         if !MahaPhotoConfiguration.default().allowPreviewPhotos {
-            cell.btnSelectClick()
+            cell.handleSelectButtonTap()
             return
         }
         

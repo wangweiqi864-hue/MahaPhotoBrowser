@@ -31,7 +31,7 @@ extension NSError {
 
     convenience init(message: String) {
         let userInfo = [NSLocalizedDescriptionKey: message]
-        self.init(domain: mahaErrorDomain, code: -1, userInfo: userInfo)
+        self.init(domain: Self.mahaErrorDomain, code: -1, userInfo: userInfo)
     }
 }
 

@@ -261,7 +261,7 @@ class MahaClipImageViewController: UIViewController {
             selectedRatio = ratio
         } else {
             isFirstEntry = true
-            selectedRatio = MahaPhotoConfiguration.default().editImageConfiguration.clipRatios.first!
+            selectedRatio = clipRatios.first ?? .custom
         }
         super.init(nibName: nil, bundle: nil)
         if isFirstEntry {

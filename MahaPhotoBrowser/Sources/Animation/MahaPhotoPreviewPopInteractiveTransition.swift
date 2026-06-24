@@ -247,25 +247,25 @@ class MahaPhotoPreviewPopInteractiveTransition: UIPercentDrivenInteractiveTransi
             return
         }
 
-        let sourceModel = fromVC.arrDataSources[fromVC.currentIndex]
+        let sourceModel = fromVC.photoModels[fromVC.currentIndex]
         let visibleIndexPaths = toVC.collectionView.indexPathsForVisibleItems
 
         var indexOffset = 0
         if !MahaPhotoUIConfiguration.default().sortAscending {
-            if toVC.showCameraCell {
+            if toVC.shouldShowCameraCell {
                 indexOffset = -1
             }
-            if #available(iOS 14.0, *), toVC.showAddPhotoCell {
+            if #available(iOS 14.0, *), toVC.shouldShowAddPhotoCell {
                 indexOffset -= 1
             }
         }
         var toIndex: Int?
         for indexPath in visibleIndexPaths {
             let dataSourceIndex = indexPath.row + indexOffset
-            if dataSourceIndex >= toVC.arrDataSources.count || dataSourceIndex < 0 {
+            if dataSourceIndex >= toVC.photoModels.count || dataSourceIndex < 0 {
                 continue
             }
-            let model = toVC.arrDataSources[dataSourceIndex]
+            let model = toVC.photoModels[dataSourceIndex]
             if model == sourceModel {
                 toIndex = indexPath.row
                 break

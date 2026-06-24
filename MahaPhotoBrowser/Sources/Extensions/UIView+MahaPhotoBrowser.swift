@@ -69,7 +69,7 @@ extension MahaPhotoBrowserWrapper where Base: UIView {
     
     var snapshotImage: UIImage {
         return UIGraphicsImageRenderer.maha.renderImage(size: base.maha.size) { rendererFormat in
-            format.opaque = base.isOpaque
+            rendererFormat.opaque = base.isOpaque
         } imageActions: { rendererContext in
             base.layer.render(in: rendererContext)
         }

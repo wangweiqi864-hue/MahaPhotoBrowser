@@ -654,7 +654,13 @@ class MahaThumbnailViewController: UIViewController {
             zlLoggerInDebug("Navigation controller is null")
             return
         }
-        let vc = MahaPhotoPreviewController(photos: navigationController.selectedPhotoModels, index: 0)
+        let selectedModels = navigationController.selectedPhotoModels
+        guard !selectedModels.isEmpty else {
+            refreshBottomToolbarState()
+            return
+        }
+
+        let vc = MahaPhotoPreviewController(photos: selectedModels, index: 0)
         vc.backBlock = { [weak self] in
             guard let `self` = self, self.hiddenStatusBar else { return }
             self.hiddenStatusBar = false
@@ -1403,7 +1409,7 @@ extension MahaThumbnailViewController: UICollectionViewDataSource, UICollectionV
         let uiConfig = MahaPhotoUIConfiguration.default()
 
         if !config.allowPreviewPhotos {
-            cell.btnSelectClick()
+            cell.handleSelectButtonTap()
             return
         }
 
